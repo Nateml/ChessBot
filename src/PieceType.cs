@@ -14,5 +14,6 @@ enum PieceType
     BB,
     BR,
     BQ,
-    BK
+    BK,
+    EMPTY
 }

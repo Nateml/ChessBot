@@ -4,7 +4,7 @@ using System.Net;
 static class MoveGenData
 {
     /**
-     * Diagonal Target bitboard
+     * Diagonal movement mask bitboard
      * Outer array indexed by position on board (0 <= i < 64)
      * Inner array indexed by diagonal direction:
      *      0 : to top right 
@@ -15,10 +15,10 @@ static class MoveGenData
      * 
      * The bitboard should not include a 1 in the position of the index of the outer array, as to allow for moves which capture the piece on that index
      */
-    private static ulong[][] diagonalPaths = new ulong[64][];
+    private static ulong[][] diagonalMasks = new ulong[64][];
 
     /**
-     * Orthogonal target bitboard
+     * Orthogonal movement mask bitboard
      * Outer array index by position on board (0 <= i < 64)
      * Inner array indexed by sliding direction:
      *      0 : to the right
@@ -29,7 +29,11 @@ static class MoveGenData
      * 
      * The bitboard should not include a 1 in the position of the index of the outer array, as to allow for moves which capture the piece on that index
      */
-    private static ulong[][] orthogonalPaths = new ulong[64][];
+    private static ulong[][] orthogonalMasks = new ulong[64][];
+
+    private static Dictionary<(int, ulong), ulong> orthogonalMovesLookupTable = new();
+
+    private static Dictionary<(int, ulong), ulong> diagonalMovesLookupTable = new();
 
     private static readonly ulong[] FileMasks = 
     {
@@ -49,8 +53,144 @@ static class MoveGenData
     /// </summary>
     public static void Init()
     {
+        // Compute the movement masks
         ComputeDiagonalPaths();
         ComputeOrthogonalPaths();
+
+        // Compute the legal move lookup tables
+        orthogonalMovesLookupTable = ComputeOrthogonalMovesLookupTable();
+        diagonalMovesLookupTable = ComputeDiagonalMovesLookupTable();
+    }
+
+    private static Dictionary<(int, ulong), ulong> ComputeOrthogonalMovesLookupTable()
+    {
+        Dictionary<(int, ulong), ulong> lookupTable = new();
+
+        // For every square on the board...
+        for (int i = 0; i < 64; i++)
+        {
+            ulong movementMask = ComputeOrthogonalMovementMask(i); // Get the orthogonal movement mask
+            ulong[] blockerConfigurations = ComputeBlockerBitboards(movementMask); // Generate all blocker bitboard configurations given the current movement mask
+
+            // Calculate the legal orthogonal moves for each blocker bitboard
+            foreach (ulong blockerBitboard in blockerConfigurations)
+            {
+                ulong legalMoveBitboard = ComputeLegalOrthogonalMovesBitboard(i, blockerBitboard);
+                lookupTable.Add((i, blockerBitboard), legalMoveBitboard);
+            }
+        }
+
+        return lookupTable;
+    }
+
+    private static Dictionary<(int, ulong), ulong> ComputeDiagonalMovesLookupTable()
+    {
+        Dictionary<(int, ulong), ulong> lookupTable = new();
+
+        // For every square on the board...
+        for (int i = 0; i < 64; i++)
+        {
+            ulong movementMask = ComputeDiagonalMovementMask(i);
+            ulong[] blockerConfigurations = ComputeBlockerBitboards(movementMask);
+
+            // Calculate the legal diagonal moves for each blocker bitboard
+            foreach (ulong blockerBitboard in blockerConfigurations)
+            {
+                ulong legalMoveBitboard = ComputeLegalDiagonalMovesBitboard(i, blockerBitboard);
+                lookupTable.Add((i, blockerBitboard), legalMoveBitboard);
+            }
+        }
+
+        return lookupTable;
+    }
+
+    /// <summary>
+    /// Generates a bitboard containing set bits in the position of each legal target square for an orthogonal move starting from the square in the given position.
+    /// Treats blockers as enemies, so the returned bitboard will have set bits in positions of the set bits in the blocker bitboard.
+    /// </summary>
+    private static ulong ComputeLegalOrthogonalMovesBitboard(int startSquare, ulong blockerBitboard)
+    {
+        ulong targets = 0;
+
+        ulong LSB = BitboardUtility.IsolateLSB(blockerBitboard);
+        while (LSB != 0)
+        {
+            int indexLSB = BitboardUtility.IndexOfLSB(LSB);
+
+            // Compute the paths by XORing the blocker paths with the movement masks
+            targets |= OrthogPathUp(startSquare) ^ (OrthogPathUp(startSquare) & OrthogPathUp(indexLSB));
+            targets |= OrthogPathRight(startSquare) ^ (OrthogPathRight(startSquare) & OrthogPathRight(indexLSB));
+            targets |= OrthogPathDown(startSquare) ^ (OrthogPathDown(startSquare) & OrthogPathDown(indexLSB));
+            targets |= OrthogPathLeft(startSquare) ^ (OrthogPathLeft(startSquare) & OrthogPathLeft(indexLSB));
+
+            blockerBitboard &= ~LSB;
+            LSB = BitboardUtility.IsolateLSB(blockerBitboard);
+        }
+
+        return targets;
+    }
+
+    /// <summary>
+    /// Generates a bitboard containing set bits in the position of each legal target square for a diagonal move starting from the square in the given position.
+    /// Treats blockers as enemies, so the returned bitboard will have set bits in positions of the set bits in the blocker bitboard.
+    /// </summary>
+    private static ulong ComputeLegalDiagonalMovesBitboard(int startSquare, ulong blockerBitboard)
+    {
+        ulong targets = 0;
+
+        ulong LSB = BitboardUtility.IsolateLSB(blockerBitboard);
+        while (LSB != 0)
+        {
+            int indexLSB = BitboardUtility.IndexOfLSB(LSB);
+
+            targets |= DiagPathToTopRight(startSquare) ^ (DiagPathToTopRight(startSquare) & DiagPathToTopRight(indexLSB));
+            targets |= DiagPathToTopLeft(startSquare) ^ (DiagPathToTopLeft(startSquare) & DiagPathToTopLeft(indexLSB));
+            targets |= DiagPathToBottomRight(startSquare) ^ (DiagPathToBottomRight(startSquare) & DiagPathToBottomRight(indexLSB));
+            targets |= DiagPathToBottomLeft(startSquare) ^ (DiagPathToBottomLeft(startSquare) & DiagPathToBottomLeft(indexLSB));
+
+            blockerBitboard &= ~LSB;
+            LSB = BitboardUtility.IsolateLSB(blockerBitboard);
+        }
+
+        return targets;
+    }
+
+    /// <summary>
+    /// Creates an array of all possible configurations of blocker pieces in the way of the given movement mask.
+    /// </summary>
+    private static ulong[] ComputeBlockerBitboards(ulong movementMask)
+    {
+        // Create a list of the indices of the set bits in the movement mask
+        List<int> movementMaskIndices = new();
+        for (int i = 0; i < 64; i++)
+        {
+            // Loop through each bit and check if the bit is set
+            if (((movementMask >> i) & 1)==1)
+            {
+                movementMaskIndices.Add(i);
+            }
+        }
+
+        // Calculate the total number of blocker configurations
+        int numConfigurations = 1 << movementMaskIndices.Count; // 2^n
+        ulong[] blockerBitboards = new ulong[numConfigurations];
+        
+        // Create the blocker bitboards
+        for (int blockerConfiguration = 0; blockerConfiguration < numConfigurations; blockerConfiguration++)
+        {
+            // Loop through every blocker configuration
+            // Each configuration can be represented by a single number 
+
+            for (int bitIndex = 0; bitIndex < movementMaskIndices.Count; bitIndex++)
+            {
+                // Shift the blocker configuration bits into the movement mask positions
+                int bit = (blockerConfiguration >> bitIndex) & 1;
+                blockerBitboards[blockerConfiguration] |= (ulong)bit << movementMaskIndices[bitIndex];
+            }
+
+        }
+
+        return blockerBitboards;
     }
 
     /// <summary>
@@ -61,12 +201,12 @@ static class MoveGenData
         // loop through every tile
         for (int i = 0; i < 64; i++)
         {
-            diagonalPaths[i] = new ulong[4];
+            diagonalMasks[i] = new ulong[4];
 
-            diagonalPaths[i][0] = DiagPathToTopRight(i);
-            diagonalPaths[i][1] = DiagPathToBottomRight(i);
-            diagonalPaths[i][2] = DiagPathToBottomLeft(i);
-            diagonalPaths[i][3] = DiagPathToTopLeft(i);
+            diagonalMasks[i][0] = DiagPathToTopRight(i);
+            diagonalMasks[i][1] = DiagPathToBottomRight(i);
+            diagonalMasks[i][2] = DiagPathToBottomLeft(i);
+            diagonalMasks[i][3] = DiagPathToTopLeft(i);
         }
     }
 
@@ -150,15 +290,30 @@ static class MoveGenData
         // loop through every tile
         for (int i = 0; i < 64; i++)
         {
-            orthogonalPaths[i] = new ulong[4];
+            orthogonalMasks[i] = new ulong[4];
 
-            orthogonalPaths[i][0] = OrthogPathRight(i);
-            orthogonalPaths[i][1] = OrthogPathDown(i);
-            orthogonalPaths[i][2] = OrthogPathLeft(i);
-            orthogonalPaths[i][3] = OrthogPathUp(i);
+            orthogonalMasks[i][0] = OrthogPathRight(i);
+            orthogonalMasks[i][1] = OrthogPathDown(i);
+            orthogonalMasks[i][2] = OrthogPathLeft(i);
+            orthogonalMasks[i][3] = OrthogPathUp(i);
         }
     }
 
+    /// <summary>
+    /// Returns the orthogonal movement mask (rook movement) as a ulong from the specified position in the board.
+    /// </summary>
+    private static ulong ComputeOrthogonalMovementMask(int i)
+    {
+        return OrthogPathRight(i) | OrthogPathDown(i) | OrthogPathLeft(i) | OrthogPathUp(i);
+    }
+
+    /// <summary>
+    /// Returns the diagonal movement mask (bishop movement) as a ulong from the specified position in the board.
+    /// </summary>
+    private static ulong ComputeDiagonalMovementMask(int i)
+    {
+        return DiagPathToTopRight(i) | DiagPathToBottomRight(i) | DiagPathToBottomLeft(i) | DiagPathToTopLeft(i);
+    }
     /// <summary>
     /// Creates and returns a bitboard representing the target squares for the up orthogonal sliding path starting at the square with index i.
     /// </summary>
@@ -256,4 +411,17 @@ static class MoveGenData
     /// The bitboard does not include a 1 in the position of the index of the outer array, as to allow for moves which capture the piece on that index
     /// </summary>
     public static ulong DiagonalPaths { get; }
+
+    public static Dictionary<(int, ulong), ulong>? OrthogonalMovesLookupTable
+    {
+        get;
+        private set;
+    }
+
+    public static Dictionary<(int, ulong), ulong>? DiagonalMovesLookupTable
+    {
+        get;
+        private set;
+    }
+
 }
