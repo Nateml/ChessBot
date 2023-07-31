@@ -1,29 +1,31 @@
-class Move
+namespace ChessBot;
+
+public class Move
 {
     /// <summary>
     /// A bunch of flags for moves (do not exceed 4 bits).
     /// NOTE: All captures have the 3rd bit set, and all promotions have the 4th bit set.
     /// </summary>
-    public static readonly int QuietMoveFlag = 0;
-    public static readonly int DoublePawnPushFlag = 0b1;
-    public static readonly int KingCastleFlag = 0b10;
-    public static readonly int QueenCastleFlag = 0b11;
-    public static readonly int CaptureFlag = 0b100;
-    public static readonly int EpCaptureFlag = 0b101;
-    public static readonly int KnightPromotionFlag = 0b1000;
-    public static readonly int BishopPromotionFlag = 0b1001;
-    public static readonly int RookPromotionFlag = 0b1010;
-    public static readonly int QueenPromotionFlag = 0b1011;
-    public static readonly int KnightPromoCaptureFlag = 0b1100;
-    public static readonly int BishopPromoCaptureFlag = 0b1101;
-    public static readonly int RookPromoCaptureFlag = 0b1110;
-    public static readonly int QueenPromoCaptureFlag = 0b1111;
+    public const int QuietMoveFlag = 0;
+    public const int DoublePawnPushFlag = 0b1;
+    public const int KingCastleFlag = 0b10;
+    public const int QueenCastleFlag = 0b11;
+    public const int CaptureFlag = 0b100;
+    public const int EpCaptureFlag = 0b101;
+    public const int KnightPromotionFlag = 0b1000;
+    public const int BishopPromotionFlag = 0b1001;
+    public const int RookPromotionFlag = 0b1010;
+    public const int QueenPromotionFlag = 0b1011;
+    public const int KnightPromoCaptureFlag = 0b1100;
+    public const int BishopPromoCaptureFlag = 0b1101;
+    public const int RookPromoCaptureFlag = 0b1110;
+    public const int QueenPromoCaptureFlag = 0b1111;
 
     private readonly int encodedMove = 0;
 
     public Move(int from, int to, PieceType movingPiece, PieceType capturePiece, int flag)
     {
-        encodedMove |= ((flag & 0xf) << 18) | (((int)capturePiece & 0xf) << 14) | (((int)movingPiece & 0xf) << 10) | ((from & 0x3f) << 6) | (to & 0x3f);
+        encodedMove |= ((flag & 0xf) << 20) | (((int)capturePiece & 0xf) << 16) | (((int)movingPiece & 0xf) << 12) | ((from & 0x3f) << 6) | (to & 0x3f);
     }
 
     /// <summary>
@@ -34,7 +36,7 @@ class Move
     {
         get 
         {
-            return (PieceType) ((encodedMove >> 14) & 0xf);
+            return (PieceType) ((encodedMove >> 16) & 0xf);
         }
     }
 
@@ -45,7 +47,7 @@ class Move
     {
         get 
         {
-            return (PieceType) ((encodedMove >> 10) & 0xf);
+            return (PieceType) ((encodedMove >> 12) & 0xf);
         }
     }
 
@@ -162,11 +164,16 @@ class Move
     /// <summary>
     /// Returns the flag of the move.
     /// </summary>
-    private int Flag
+    public int Flag
     {
         get
         {
-            return (encodedMove >> 18) & 0xf;
+            return (encodedMove >> 20) & 0xf;
         }
+    }
+
+    public override string ToString()
+    {
+        return (Square)From + "" + (Square)To;
     }
 }

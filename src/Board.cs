@@ -1,55 +1,323 @@
+namespace ChessBot;
+
 using System.Net.WebSockets;
 using System.Reflection.Metadata;
 using System.Runtime.Intrinsics.X86;
 using System.Xml.XPath;
 
-sealed class Board
+public sealed class Board
 {
 
     private ulong[] bitboards = new ulong[13];
 
-    private long epFile;
+    private ulong epFile;
     private bool CWK, CWQ, CBQ, CBK;
 
     private bool isWhiteToMove;
 
-    MoveGen moveGen;
+    // CACHE:
+    private ulong whiteAttackBitboard;
+    private bool hasCachedWhiteAttackBitboard;
+    private ulong blackAttackBitboard;
+    private bool hasCachedBlackAttackBitboard;
+    private ulong whiteUnsafeKingSquares;
+    private bool hasCachedWhiteUnsafeKingSquares;
+    private ulong blackUnsafeKingSquares;
+    private bool hasCachedBlackUnsafeKingSquares;
+    private bool isKingInCheck;
+    private bool hasCachedIsKingInCheck;
+    private ulong kingAttackers;
+    private bool hasCachedKingAttackers;
+
+    private Stack<StateData> stateHistory = new();
+
+    public int fullMoveCount;
+    public int halfMoveCount;
+
+    public MoveGen moveGen;
 
     List<IBoardListener> listeners;
 
-    public readonly string FenStartingPosition = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    public const string FenStartingPosition = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    //public const string FenStartingPosition = "rnbqkbnr/ppp1pppp/8/3p4/2P5/8/PP1PPPPP/RNBQKBNR w KQkq d5 1 2";
+
 
     /// <summary>
     /// Creates a board instance, using the specified fen string as the starting position.
     /// </summary>
     /// <param name="fen">the fen string specifying the position of the board</param>
-    public Board(String fen)
+    public Board(string fen = FenStartingPosition)
     {
         bitboards[12] = ulong.MaxValue; // sentinal value
         moveGen = new MoveGen(this);
         listeners = new();
+        halfMoveCount = 0;
+        fullMoveCount = 0;
         LoadPositionFromFen(fen);
     }
 
     /// <summary>
     /// Sets up the board according to the given fen string.
     /// </summary>
-    public void LoadPositionFromFen(String fen)
+    public void LoadPositionFromFen(string fen)
+    {
+        FenParser fenParser = new(fen);
+        bitboards[(int)PieceType.WP] = fenParser.WP;
+        bitboards[(int)PieceType.WN] = fenParser.WN;
+        bitboards[(int)PieceType.WB] = fenParser.WB;
+        bitboards[(int)PieceType.WR] = fenParser.WR;
+        bitboards[(int)PieceType.WQ] = fenParser.WQ;
+        bitboards[(int)PieceType.WK] = fenParser.WK;
+        bitboards[(int)PieceType.BP] = fenParser.BP;
+        bitboards[(int)PieceType.BN] = fenParser.BN;
+        bitboards[(int)PieceType.BB] = fenParser.BB;
+        bitboards[(int)PieceType.BR] = fenParser.BR;
+        bitboards[(int)PieceType.BQ] = fenParser.BQ;
+        bitboards[(int)PieceType.BK] = fenParser.BK;
+
+        epFile = fenParser.epFile;
+
+        CWK = fenParser.cwk;
+        CWQ = fenParser.cwq;
+        CBK = fenParser.cbk;
+        CBQ = fenParser.cbq;
+
+        halfMoveCount = fenParser.halfMoveCount;
+        fullMoveCount = fenParser.fullMoveCount;
+
+        isWhiteToMove = fenParser.isWhiteToMove;
+    }
+
+    /// <summary>
+    /// Makes a given move, updates the appropriate bitboards and other state information.
+    /// Notifies listeners of a state change.
+    /// </summary>
+    public void MakeMove(Move move)
     {
 
+        // Push state data to stack before making the move
+        stateHistory.Push(new StateData(move, CWK, CWQ, CBK, CBQ, epFile, fullMoveCount, halfMoveCount));
+
+        int to = move.To;
+        int from = move.From;
+
+        ulong fromBitboard = 1ul << from;
+        ulong toBitboard = 1ul << to;
+
+        PieceType movingPiece = move.MovingPiece;
+        PieceType capturedPiece = move.CapturedPiece;
+
+        bool white = MoveUtility.GetPieceColour(movingPiece) == 0;
+
+        // Clear en passant file
+        epFile = 0;
+
+        // Update the moving piece's bitboard
+
+        bitboards[(int)movingPiece] ^= fromBitboard;
+
+        if (!move.IsPromotion())
+        {
+            bitboards[(int)movingPiece] ^= toBitboard;
+
+        }
+        else
+        {
+            switch (move.Flag) {
+                case Move.KnightPromoCaptureFlag:
+                case Move.KnightPromotionFlag:
+                    bitboards[isWhiteToMove ? (int)PieceType.WN : (int)PieceType.BN] ^= toBitboard;
+                    break;
+                case Move.BishopPromoCaptureFlag:
+                case Move.BishopPromotionFlag:
+                    bitboards[isWhiteToMove ? (int)PieceType.WB : (int)PieceType.BB] ^= toBitboard;
+                    break;
+                case Move.RookPromoCaptureFlag:
+                case Move.RookPromotionFlag:
+                    bitboards[isWhiteToMove ? (int)PieceType.WR : (int)PieceType.BR] ^= toBitboard;
+                    break;
+                case Move.QueenPromoCaptureFlag:
+                case Move.QueenPromotionFlag:
+                    bitboards[isWhiteToMove ? (int)PieceType.WQ : (int)PieceType.BQ] ^= toBitboard;
+                    break;
+            }
+        }
+
+        // Handle castling rights
+        if (movingPiece == PieceType.WK)
+        {
+            CWK = false;
+            CWQ = false;
+        }
+        else if (movingPiece == PieceType.BK)
+        {
+            CBK = false;
+            CBQ = false;
+        }
+        else
+        {
+            if (from == 63) CWK = false;
+            else if (from == 56) CWQ = false;
+            else if (from == 7) CBK = false;
+            else if (from == 0) CBQ = false;
+        } 
+
+        if (move.IsCapture())
+        {
+            if (move.IsEnPassant())
+            {
+                bitboards[(int)capturedPiece] ^= isWhiteToMove ? toBitboard << 8 : toBitboard >> 8;
+            }
+            else
+            {
+                bitboards[(int)capturedPiece] ^= toBitboard;
+            }
+
+            if (to == 63) CWK = false;
+            else if (to == 56) CWQ = false;
+            else if (to == 7) CBK = false;
+            else if (to == 0) CBQ = false;
+        }
+        else if (move.IsDoublePawnPush())
+        {
+            epFile = MoveGenData.FileMasks[to % 8];
+        }
+        else if (move.IsKingsideCastle())
+        {
+            // Update the rook bitboard
+            if (white)
+            {
+                bitboards[(int)PieceType.WR] ^= 0b101ul << 61;
+                CWK = false;
+            }
+            else
+            {
+                bitboards[(int)PieceType.BR] ^= 0b10100000ul;
+                CBK = false;
+            }
+        }
+        else if (move.IsQueensideCastle())
+        {
+            // Update the rook bitboard
+            if (white)
+            {
+                bitboards[(int)PieceType.WR] ^= 0b1001ul << 56;
+                CWQ = false;
+            }
+            else
+            {
+                bitboards[(int)PieceType.BR] ^= 0b1001ul;
+                CBQ = false;
+            }
+        }
+
+        // Update state information
+        isWhiteToMove = !isWhiteToMove;
+        if (halfMoveCount != 1 || ((halfMoveCount == 1) && IsWhiteToMove))
+        {
+            halfMoveCount++;
+        }
+        if (halfMoveCount % 2 == 0) fullMoveCount++;
+
+        // Clear cached data
+        ClearCaches();
+
+        // Notify listeners of the state change
+        listeners.ForEach(listener => listener.OnBoardStateChange());
+    }
+
+    public void UnmakeMove()
+    {
+        StateData previousState = stateHistory.Pop();
+        Move move = previousState.lastMove;
+
+        ulong fromBitboard = 1ul << move.From;
+        ulong toBitboard = 1ul << move.To;
+
+        // update the moving pieces bitboard
+        bitboards[(int)move.MovingPiece]^= (toBitboard & bitboards[(int)move.MovingPiece]) | fromBitboard;
+
+        switch(move.Flag)
+        {
+            case Move.KnightPromoCaptureFlag:
+            case Move.KnightPromotionFlag:
+                bitboards[isWhiteToMove ? (int)PieceType.BN : (int)PieceType.WN] ^= toBitboard;
+                break;
+            case Move.BishopPromoCaptureFlag:
+            case Move.BishopPromotionFlag:
+                bitboards[isWhiteToMove ? (int)PieceType.BB : (int)PieceType.WB] ^= toBitboard;
+                break;
+            case Move.RookPromoCaptureFlag:
+            case Move.RookPromotionFlag:
+                bitboards[isWhiteToMove ? (int)PieceType.BR : (int)PieceType.WR] ^= toBitboard;
+                break;
+            case Move.QueenPromoCaptureFlag:
+            case Move.QueenPromotionFlag:
+                bitboards[isWhiteToMove ? (int)PieceType.BQ : (int)PieceType.WQ] ^= toBitboard;
+                break;
+        }
+
+        if (move.IsCapture())
+        {
+            if (move.IsEnPassant())
+            {
+                bitboards[(int)move.CapturedPiece] ^= isWhiteToMove ? toBitboard >> 8 : toBitboard << 8;
+            }
+            else
+            {
+                bitboards[(int)move.CapturedPiece] ^= toBitboard;
+            }
+        }
+        else if (move.IsKingsideCastle())
+        {
+            // Update the rook bitboard
+            if (isWhiteToMove)
+            {
+                bitboards[(int)PieceType.BR] ^= 0b10100000ul;
+            }
+            else
+            {
+                bitboards[(int)PieceType.WR] ^= 0b101ul << 61;
+            }
+        }
+        else if (move.IsQueensideCastle())
+        {
+            // Update the rook bitboard
+            if (isWhiteToMove)
+            {
+                bitboards[(int)PieceType.BR] ^= 0b1001ul;
+            }
+            else
+            {
+                bitboards[(int)PieceType.WR] ^= 0b1001ul << 56;
+            }
+        }
+
+        isWhiteToMove = !isWhiteToMove;
+
+        // Clear cached data
+        ClearCaches();
+
+        CWK = previousState.CWK;
+        CWQ = previousState.CWQ;
+        CBK = previousState.CBK;
+        CBQ = previousState.CBQ;
+        epFile = previousState.epFile;
+        halfMoveCount = previousState.halfMoveCount;
+        fullMoveCount = previousState.fullMoveCount;
     }
 
     /// <summary>
     /// Returns all the piece bitboards as an array, indexed by their PieceType enum.
     /// </summary>
-    public ulong[] Bitboards { get; }
+    public ulong[] Bitboards { get { return bitboards; } }
 
-    public bool IsWhiteToMove { get; }
+    public bool IsWhiteToMove { get { return isWhiteToMove; } }
 
     /// <summary>
     /// Returns the file mask of the current file where an en-passant is possible, or zero if there is no legal en-passant.
     /// </summary>
-    public long EpFile { get; }
+    public ulong EpFile { get { return epFile; } }
 
     /// <summary>
     /// Returns true if white has kingside castling permission, false otherwise.
@@ -70,6 +338,22 @@ sealed class Board
     /// Returns true if black has queenside castling permission, false otherwise.
     /// </summary>
     public bool CanBlackCastleQueenside() { return CBQ; }
+
+    public int WhiteKingSquare
+    {
+        get
+        {
+            return BitboardUtility.IndexOfLSB(GetBitboardByPieceType(PieceType.WK));
+        }
+    }
+
+    public int BlackKingSquare
+    {
+        get
+        {
+            return BitboardUtility.IndexOfLSB(GetBitboardByPieceType(PieceType.BK));
+        }
+    }
 
     /// <summary>
     /// The bitboard containing the locations of all white pieces.
@@ -104,9 +388,196 @@ sealed class Board
         }
     }
 
+    public ulong WhiteAttackBitboard
+    {
+        get
+        {
+            if (hasCachedWhiteAttackBitboard) return whiteAttackBitboard;
+
+            whiteAttackBitboard = 0ul;
+            blackUnsafeKingSquares = 0ul;
+            
+            ulong wpOcc = GetBitboardByPieceType(PieceType.WP);
+            ulong wnOcc = GetBitboardByPieceType(PieceType.WN);
+            ulong wbOcc = GetBitboardByPieceType(PieceType.WB);
+            ulong wrOcc = GetBitboardByPieceType(PieceType.WR);
+            ulong wqOcc = GetBitboardByPieceType(PieceType.WQ);
+            ulong wkOcc = GetBitboardByPieceType(PieceType.WK);
+
+            BitboardUtility.ForEachBitscanForward(wpOcc, (square) => {
+                whiteAttackBitboard |= MoveGenData.whitePawnAttacks[square];
+            });
+
+            BitboardUtility.ForEachBitscanForward(wnOcc, (square) => {
+                whiteAttackBitboard |= MoveGenData.knightTargets[square];
+            });
+
+            BitboardUtility.ForEachBitscanForward(wbOcc, (square) => {
+                whiteAttackBitboard |= MoveGenHelper.BishopAttacks(AllPiecesBitboard, square);
+                blackUnsafeKingSquares |= MoveGenHelper.BishopAttacks(AllPiecesBitboard^GetBitboardByPieceType(PieceType.BK), square);
+            });
+
+            BitboardUtility.ForEachBitscanForward(wrOcc, (square) => {
+                whiteAttackBitboard |= MoveGenHelper.RookAttacks(AllPiecesBitboard, square);
+                blackUnsafeKingSquares |= MoveGenHelper.RookAttacks(AllPiecesBitboard^GetBitboardByPieceType(PieceType.BK), square);
+            });
+
+            BitboardUtility.ForEachBitscanForward(wqOcc, (square) => {
+                whiteAttackBitboard |= MoveGenHelper.QueenAttacks(AllPiecesBitboard, square);
+                blackUnsafeKingSquares |= MoveGenHelper.QueenAttacks(AllPiecesBitboard^GetBitboardByPieceType(PieceType.BK), square);
+            });
+
+            blackUnsafeKingSquares |= whiteAttackBitboard;
+
+            hasCachedWhiteAttackBitboard = true;
+            hasCachedBlackUnsafeKingSquares = true;
+            return whiteAttackBitboard;
+        }
+    }
+
+    public ulong WhiteUnsafeKingSquares
+    {
+        get
+        {
+            if (hasCachedWhiteUnsafeKingSquares) return whiteUnsafeKingSquares;
+
+            whiteUnsafeKingSquares = 0ul;
+
+            ulong bpOcc = GetBitboardByPieceType(PieceType.BP);
+            ulong bnOcc = GetBitboardByPieceType(PieceType.BN);
+            ulong bbOcc = GetBitboardByPieceType(PieceType.BB);
+            ulong brOcc = GetBitboardByPieceType(PieceType.BR);
+            ulong bqOcc = GetBitboardByPieceType(PieceType.BQ);
+            ulong bkOcc = GetBitboardByPieceType(PieceType.BK);
+
+            BitboardUtility.ForEachBitscanForward(bpOcc, (square) => {
+                whiteUnsafeKingSquares |= MoveGenData.blackPawnAttacks[square];
+            });
+
+            BitboardUtility.ForEachBitscanForward(bnOcc, (square) => {
+                whiteUnsafeKingSquares |= MoveGenData.knightTargets[square];
+            });
+
+            BitboardUtility.ForEachBitscanForward(bbOcc, (square) => {
+                whiteUnsafeKingSquares |= MoveGenHelper.BishopAttacks(AllPiecesBitboard^GetBitboardByPieceType(PieceType.WK), square);
+            });
+
+            BitboardUtility.ForEachBitscanForward(brOcc, (square) => {
+                whiteUnsafeKingSquares |= MoveGenHelper.RookAttacks(AllPiecesBitboard^GetBitboardByPieceType(PieceType.WK), square);
+            });
+
+            BitboardUtility.ForEachBitscanForward(bqOcc, (square) => {
+                whiteUnsafeKingSquares |= MoveGenHelper.QueenAttacks(AllPiecesBitboard^GetBitboardByPieceType(PieceType.WK), square);
+            });
+
+            hasCachedWhiteUnsafeKingSquares = true;
+            return whiteUnsafeKingSquares;
+        }
+    }
+
+    public ulong BlackAttackBitboard
+    {
+        get
+        {
+            if (hasCachedBlackAttackBitboard) return blackAttackBitboard;
+
+            blackAttackBitboard = 0ul;
+            whiteUnsafeKingSquares = 0ul;
+
+            ulong bpOcc = GetBitboardByPieceType(PieceType.BP);
+            ulong bnOcc = GetBitboardByPieceType(PieceType.BN);
+            ulong bbOcc = GetBitboardByPieceType(PieceType.BB);
+            ulong brOcc = GetBitboardByPieceType(PieceType.BR);
+            ulong bqOcc = GetBitboardByPieceType(PieceType.BQ);
+            ulong bkOcc = GetBitboardByPieceType(PieceType.BK);
+
+            BitboardUtility.ForEachBitscanForward(bpOcc, (square) => {
+                blackAttackBitboard |= MoveGenData.blackPawnAttacks[square];
+            });
+
+            BitboardUtility.ForEachBitscanForward(bnOcc, (square) => {
+                blackAttackBitboard |= MoveGenData.knightTargets[square];
+            });
+
+            BitboardUtility.ForEachBitscanForward(bbOcc, (square) => {
+                blackAttackBitboard |= MoveGenHelper.BishopAttacks(AllPiecesBitboard, square);
+                whiteUnsafeKingSquares |= MoveGenHelper.BishopAttacks(AllPiecesBitboard^GetBitboardByPieceType(PieceType.WK), square);
+            });
+
+            BitboardUtility.ForEachBitscanForward(brOcc, (square) => {
+                blackAttackBitboard |= MoveGenHelper.RookAttacks(AllPiecesBitboard, square);
+                whiteUnsafeKingSquares |= MoveGenHelper.RookAttacks(AllPiecesBitboard^GetBitboardByPieceType(PieceType.WK), square);
+            });
+
+            BitboardUtility.ForEachBitscanForward(bqOcc, (square) => {
+                blackAttackBitboard |= MoveGenHelper.QueenAttacks(AllPiecesBitboard, square);
+                whiteUnsafeKingSquares |= MoveGenHelper.QueenAttacks(AllPiecesBitboard^GetBitboardByPieceType(PieceType.WK), square);
+            });
+
+            whiteUnsafeKingSquares |= blackAttackBitboard;
+
+            hasCachedWhiteUnsafeKingSquares = true;
+            hasCachedBlackAttackBitboard = true;
+            return blackAttackBitboard;
+        }
+    }
+
+    public ulong BlackUnsafeKingSquares
+    {
+        get
+        {
+            if (hasCachedBlackUnsafeKingSquares) return blackUnsafeKingSquares;
+
+            blackUnsafeKingSquares = 0ul;
+            
+            ulong wpOcc = GetBitboardByPieceType(PieceType.WP);
+            ulong wnOcc = GetBitboardByPieceType(PieceType.WN);
+            ulong wbOcc = GetBitboardByPieceType(PieceType.WB);
+            ulong wrOcc = GetBitboardByPieceType(PieceType.WR);
+            ulong wqOcc = GetBitboardByPieceType(PieceType.WQ);
+            ulong wkOcc = GetBitboardByPieceType(PieceType.WK);
+
+            BitboardUtility.ForEachBitscanForward(wpOcc, (square) => {
+                blackUnsafeKingSquares |= MoveGenData.whitePawnAttacks[square];
+            });
+
+            BitboardUtility.ForEachBitscanForward(wnOcc, (square) => {
+                blackUnsafeKingSquares |= MoveGenData.knightTargets[square];
+            });
+
+            BitboardUtility.ForEachBitscanForward(wbOcc, (square) => {
+                blackUnsafeKingSquares |= MoveGenHelper.BishopAttacks(AllPiecesBitboard^GetBitboardByPieceType(PieceType.BK), square);
+            });
+
+            BitboardUtility.ForEachBitscanForward(wrOcc, (square) => {
+                blackUnsafeKingSquares |= MoveGenHelper.RookAttacks(AllPiecesBitboard^GetBitboardByPieceType(PieceType.BK), square);
+            });
+
+            BitboardUtility.ForEachBitscanForward(wqOcc, (square) => {
+                blackUnsafeKingSquares |= MoveGenHelper.QueenAttacks(AllPiecesBitboard^GetBitboardByPieceType(PieceType.BK), square);
+            });
+
+            hasCachedBlackUnsafeKingSquares = true;
+            return blackUnsafeKingSquares;
+        }
+    }
+
     public ulong GetBitboardByPieceType(PieceType pieceType)
     {
         return bitboards[(int)pieceType];
+    }
+
+    private void ClearCaches()
+    {
+        hasCachedWhiteAttackBitboard = false;
+        hasCachedBlackAttackBitboard = false;
+
+        hasCachedBlackUnsafeKingSquares = false;
+        hasCachedWhiteUnsafeKingSquares = false;
+
+        hasCachedIsKingInCheck = false;
+
+        hasCachedKingAttackers = false;
     }
 
     public Move[] GetLegalMoves()
@@ -114,17 +585,47 @@ sealed class Board
         return moveGen.GenerateLegalMoves().ToArray();
     }
 
-    /// <summary>
-    /// Makes a given move, updates the appropriate bitboards and other state information.
-    /// Notifies listeners of a state change.
-    /// </summary>
-    public void MakeMove(Move move)
+    public bool IsMoveLegal(Move move)
     {
-        // TODO: Implement Method
+        MakeMove(move);
+        bool inCheck = IsKingInCheck(!isWhiteToMove);
+        UnmakeMove();
 
-        // Notify listeners of the state change
-        listeners.ForEach(listener => listener.OnBoardStateChange());
+        return !inCheck;
     }
+
+    public bool IsKingInCheck(bool white)
+    {
+        if (hasCachedIsKingInCheck) return isKingInCheck;
+
+        int kingSquare = white ? BitboardUtility.IndexOfLSB(bitboards[(int)PieceType.WK]) : BitboardUtility.IndexOfLSB(bitboards[(int)PieceType.BK]);
+        isKingInCheck = BitboardUtility.IsBitSet(white ? BlackAttackBitboard : WhiteAttackBitboard, kingSquare);
+
+        hasCachedIsKingInCheck = true;
+        return isKingInCheck;
+    }
+
+    public ulong GetKingAttackers(bool white)
+    {
+        if (hasCachedKingAttackers) return kingAttackers;
+
+        int kingSquare = white ? BitboardUtility.IndexOfLSB(bitboards[(int)PieceType.WK]) : BitboardUtility.IndexOfLSB(bitboards[(int)PieceType.BK]);
+        kingAttackers = 0ul;
+
+        ulong pawnAttackers = white ? MoveGenData.whitePawnAttacks[kingSquare] & bitboards[(int)PieceType.BP] : MoveGenData.blackPawnAttacks[kingSquare] & bitboards[(int)PieceType.WP];
+        ulong knightAttackers = MoveGenData.knightTargets[kingSquare] & bitboards[white ? (int)PieceType.BN : (int)PieceType.WN];
+        ulong bishopQueenAttackers = Magic.GetBishopTargets(kingSquare, AllPiecesBitboard) & (white ? bitboards[(int)PieceType.BB] | bitboards[(int)PieceType.BQ] : bitboards[(int)PieceType.WB] | bitboards[(int)PieceType.WQ]);
+        ulong rookQueenAttackers = Magic.GetRookTargets(kingSquare, AllPiecesBitboard) & (white ? bitboards[(int)PieceType.BR] | bitboards[(int)PieceType.BQ] : bitboards[(int)PieceType.WR] | bitboards[(int)PieceType.WQ]);
+
+        kingAttackers |= pawnAttackers | knightAttackers | bishopQueenAttackers | rookQueenAttackers;
+
+        isKingInCheck = kingAttackers != 0;
+        hasCachedIsKingInCheck = true;
+
+        hasCachedKingAttackers = true;
+        return kingAttackers;
+    }
+
 
     /// <summary>
     /// Returns the type of piece on the tile at the given index.
@@ -132,10 +633,29 @@ sealed class Board
     public PieceType GetPieceType(int index)
     {
         ulong positionBitboard = 1ul << index;
-        for (int i = 0;; i++)
+        for (int i = 0; ; i++)
         {
-            if ((bitboards[i] & positionBitboard) != 0) return (PieceType)i;
+            try
+            {
+                if ((bitboards[i] & positionBitboard) != 0) return (PieceType)i;
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.ToString());
+                Console.WriteLine("Index: " + i);
+                for (int j = 0; j < bitboards.Length; j++)
+                {
+                    Console.WriteLine("Bitboard for " + (PieceType)j);
+                    BitboardUtility.PrintBitboard(bitboards[j]);
+                }
+                Environment.Exit(0);
+            }
         }
+    }
+
+    public bool SquareIsUnderEnemyAttack(int square)
+    {
+        return BitboardUtility.IsBitSet(isWhiteToMove ? BlackAttackBitboard : WhiteAttackBitboard, square);
     }
 
     public void AttachListener(IBoardListener listener)

@@ -1,4 +1,6 @@
-enum PieceType
+namespace ChessBot;
+
+public enum PieceType
 {
     /// <summary>
     /// Identifies a piece of a specific type and colour.

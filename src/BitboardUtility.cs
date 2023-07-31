@@ -1,3 +1,5 @@
+namespace ChessBot;
+
 using System.Linq.Expressions;
 using System.Numerics;
 
@@ -8,10 +10,63 @@ static class BitboardUtility
         0x1010101010101010L, 0x2020202020202020L, 0x4040404040404040L, 0x8080808080808080L
     };
 
+    public static void PrintBitboard(ulong bitboard)
+    {
+        string[][] board = new string[8][];
+
+
+        for (int i = 0; i < 64; i++) {
+            if (board[i/8] is null)
+            {
+                board[i/8] = new string[8];
+            }
+            board[i/8][i%8] = "0 ";
+        }
+
+        for (int i = 0; i < 64; i++) {
+
+            if (((bitboard >> i)  & 0b1) == 1)
+            {
+                board[i/8][i%8] = "1 ";
+            }
+        }
+
+        for (int i = 0; i < 8; i++) {
+            Console.WriteLine(string.Join("", board[i]));
+        }
+    }
+
+    public static bool IsOnOrthogonalLine(int i, int j)
+    {
+        if ((i / 8) == (j / 8) | (i % 8) == (j % 8)) return true;
+        return false;
+    }
+
+    public static bool IsOnDiagonalLine(int i, int j)
+    {
+        //if (Math.Abs((i / 8) - (j / 8)) == Math.Abs((i % 8) - (j % 8))) return true;
+        if ((i / 8) - (i % 8) == (j / 8) - (j % 8) || (i / 8) + (i % 8) == (j / 8) + (j % 8)) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// Forward bitscans through all the set bits in the given bitboard.
+    /// </summary>
+    public static void ForEachBitscanForward(ulong bitboard, Action<int> operation)
+    {
+        ulong bitboardLSB = IsolateLSB(bitboard);
+        while(bitboardLSB != 0)
+        {
+            operation(IndexOfLSB(bitboardLSB));
+            bitboard &= ~bitboardLSB;
+            bitboardLSB = IsolateLSB(bitboard);
+        }
+    }
+
     /// <summary>
     /// Returns a bitboard with only the bit at the index of the least significant bit in the argument bitboard set.
     /// </summary>
-    public static ulong IsolateLSB(ulong bitboard)
+   public static ulong IsolateLSB(ulong bitboard)
     {
         return bitboard & ~(bitboard-1);
     }
@@ -22,6 +77,23 @@ static class BitboardUtility
     public static int IndexOfLSB(ulong bitboard)
     {
         return BitOperations.TrailingZeroCount(bitboard);
+    }
+
+    /// <summary>
+    /// Checks if the bit at the given index is set (i.e. is 1).
+    /// </summary>
+    public static bool IsBitSet(ulong bitboard, int index)
+    {
+        if (((bitboard >> index) & 1)==1) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// Returns a new bitboard which has no bits set in positions where there are set bits in the mask.
+    /// </summary>
+    public static ulong ExcludeBitsUsingMask(ulong bitboard, ulong mask)
+    {
+        return bitboard ^ (mask & bitboard);
     }
 
     /// <summary>
@@ -64,4 +136,16 @@ static class BitboardUtility
         return result;
     }
 
+    /// <summary>
+    /// Returns the number of set bits in the bitboard.
+    /// i.e. the number of 1s
+    /// </summary>
+    public static int CountSetBits(ulong bitboard)
+    {
+        int count = 0;
+        ForEachBitscanForward(bitboard, (lsb) => {
+            count++;
+        });
+        return count;
+    }
 }
