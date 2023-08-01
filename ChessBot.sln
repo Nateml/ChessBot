@@ -5,6 +5,8 @@ VisualStudioVersion = 17.5.002.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ChessBot", "ChessBot.csproj", "{78FD60E6-5589-48E4-A29E-0F5EAB2955A9}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RandomNumberTest", "..\RandomNumberTest\RandomNumberTest\RandomNumberTest.csproj", "{1F2BD9B2-D111-4811-847A-6977D028284A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +17,10 @@ Global
 		{78FD60E6-5589-48E4-A29E-0F5EAB2955A9}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{78FD60E6-5589-48E4-A29E-0F5EAB2955A9}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{78FD60E6-5589-48E4-A29E-0F5EAB2955A9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1F2BD9B2-D111-4811-847A-6977D028284A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1F2BD9B2-D111-4811-847A-6977D028284A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1F2BD9B2-D111-4811-847A-6977D028284A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1F2BD9B2-D111-4811-847A-6977D028284A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

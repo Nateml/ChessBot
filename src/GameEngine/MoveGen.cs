@@ -9,6 +9,12 @@ public class MoveGen : IBoardListener
 
     private ulong pinnedPieces;
     private bool hasCachedPinnedPieces;
+
+    private ulong whitePawnAttackBitboard;
+    private bool hasCachedWhitePawnAttackBitboard;
+
+    private ulong blackPawnAttackBitboard;
+    private bool hasCachedBlackPawnAttackBitboard;
     
     public MoveGen(Board board)
     {
@@ -24,25 +30,25 @@ public class MoveGen : IBoardListener
     /// <summary>
     /// Generates all legal moves in the current board position.
     /// </summary>
-    public List<Move> GenerateLegalMoves()
+    public List<Move> GenerateLegalMoves(bool capturesOnly = false)
     {
         // Return the cache if available
         if (hasCachedLegalMoves) return legalMoves;
 
         if (board.IsWhiteToMove)
         {
-            legalMoves = GenerateWhiteLegalMoves();
+            legalMoves = GenerateWhiteLegalMoves(capturesOnly);
         }
         else
         {
-            legalMoves = GenerateBlackLegalMoves();
+            legalMoves = GenerateBlackLegalMoves(capturesOnly);
         }
 
         hasCachedLegalMoves = true;
         return legalMoves;
     }
 
-    private List<Move> GenerateWhiteLegalMoves()
+    private List<Move> GenerateWhiteLegalMoves(bool capturesOnly = false)
     {
         ulong friendlyPieces = board.WhitePiecesBitboard;
         ulong enemyPieces = board.BlackPiecesBitboard;
@@ -52,19 +58,19 @@ public class MoveGen : IBoardListener
         ulong enemyKing = board.GetBitboardByPieceType(PieceType.BK);
 
         // Generate rook moves
-        GenerateRookMoves(moves, board.GetBitboardByPieceType(PieceType.WR), friendlyPieces | enemyKing, enemyPieces ^ enemyKing, true);
-        GenerateBishopMoves(moves, board.GetBitboardByPieceType(PieceType.WB), friendlyPieces | enemyKing, enemyPieces ^ enemyKing, true);
-        GenerateQueenMoves(moves, board.GetBitboardByPieceType(PieceType.WQ), friendlyPieces | enemyKing, enemyPieces ^ enemyKing, true);
-        GenerateKnightMoves(moves, board.GetBitboardByPieceType(PieceType.WN), friendlyPieces | enemyKing, enemyPieces ^ enemyKing, true);
-        GenerateWhitePawnMoves(moves, board.GetBitboardByPieceType(PieceType.WP), friendlyPieces | enemyKing, enemyPieces ^ enemyKing, board.EpFile);
-        GenerateKingMoves(moves, board.GetBitboardByPieceType(PieceType.WK), friendlyPieces | enemyKing, enemyPieces ^ enemyKing, true);
-        GenerateCastlingMoves(moves, enemyPieces | friendlyPieces, board.CanWhiteCastleKingside(), board.CanWhiteCastleQueenside(), board.CanBlackCastleKingside(), board.CanBlackCastleQueenside(), true);
+        GenerateRookMoves(moves, board.GetBitboardByPieceType(PieceType.WR), friendlyPieces | enemyKing, enemyPieces ^ enemyKing, true, capturesOnly);
+        GenerateBishopMoves(moves, board.GetBitboardByPieceType(PieceType.WB), friendlyPieces | enemyKing, enemyPieces ^ enemyKing, true, capturesOnly);
+        GenerateQueenMoves(moves, board.GetBitboardByPieceType(PieceType.WQ), friendlyPieces | enemyKing, enemyPieces ^ enemyKing, true, capturesOnly);
+        GenerateKnightMoves(moves, board.GetBitboardByPieceType(PieceType.WN), friendlyPieces | enemyKing, enemyPieces ^ enemyKing, true, capturesOnly);
+        GenerateWhitePawnMoves(moves, board.GetBitboardByPieceType(PieceType.WP), friendlyPieces | enemyKing, enemyPieces ^ enemyKing, board.EpFile, capturesOnly);
+        GenerateKingMoves(moves, board.GetBitboardByPieceType(PieceType.WK), friendlyPieces | enemyKing, enemyPieces ^ enemyKing, true, capturesOnly);
+        if (!capturesOnly) GenerateCastlingMoves(moves, enemyPieces | friendlyPieces, board.CanWhiteCastleKingside(), board.CanWhiteCastleQueenside(), board.CanBlackCastleKingside(), board.CanBlackCastleQueenside(), true);
 
         return moves;
     }
 
 
-    private List<Move> GenerateBlackLegalMoves()
+    private List<Move> GenerateBlackLegalMoves(bool capturesOnly = false)
     {
 
         ulong friendlyPieces = board.BlackPiecesBitboard;
@@ -75,23 +81,30 @@ public class MoveGen : IBoardListener
         ulong enemyKing = board.GetBitboardByPieceType(PieceType.WK);
 
         // Generate moves for each piece type here
-        GenerateRookMoves(moves, board.GetBitboardByPieceType(PieceType.BR),friendlyPieces | enemyKing, enemyPieces ^ enemyKing, false);
-        GenerateBishopMoves(moves, board.GetBitboardByPieceType(PieceType.BB), friendlyPieces | enemyKing, enemyPieces ^ enemyKing, false);
-        GenerateKnightMoves(moves, board.GetBitboardByPieceType(PieceType.BN), friendlyPieces | enemyKing, enemyPieces ^ enemyKing, false);
-        GenerateQueenMoves(moves, board.GetBitboardByPieceType(PieceType.BQ), friendlyPieces | enemyKing, enemyPieces ^ enemyKing, false);
-        GenerateBlackPawnMoves(moves, board.GetBitboardByPieceType(PieceType.BP), friendlyPieces | enemyKing, enemyPieces ^ enemyKing, board.EpFile);
-        GenerateKingMoves(moves, board.GetBitboardByPieceType(PieceType.BK), friendlyPieces | enemyKing, enemyPieces ^ enemyKing, false);
-        GenerateCastlingMoves(moves, enemyPieces | friendlyPieces, board.CanWhiteCastleKingside(), board.CanWhiteCastleQueenside(), board.CanBlackCastleKingside(), board.CanBlackCastleQueenside(), false);
+        GenerateRookMoves(moves, board.GetBitboardByPieceType(PieceType.BR),friendlyPieces | enemyKing, enemyPieces ^ enemyKing, false, capturesOnly);
+        GenerateBishopMoves(moves, board.GetBitboardByPieceType(PieceType.BB), friendlyPieces | enemyKing, enemyPieces ^ enemyKing, false, capturesOnly);
+        GenerateKnightMoves(moves, board.GetBitboardByPieceType(PieceType.BN), friendlyPieces | enemyKing, enemyPieces ^ enemyKing, false, capturesOnly);
+        GenerateQueenMoves(moves, board.GetBitboardByPieceType(PieceType.BQ), friendlyPieces | enemyKing, enemyPieces ^ enemyKing, false, capturesOnly);
+        GenerateBlackPawnMoves(moves, board.GetBitboardByPieceType(PieceType.BP), friendlyPieces | enemyKing, enemyPieces ^ enemyKing, board.EpFile, capturesOnly);
+        GenerateKingMoves(moves, board.GetBitboardByPieceType(PieceType.BK), friendlyPieces | enemyKing, enemyPieces ^ enemyKing, false, capturesOnly);
+        if (!capturesOnly) GenerateCastlingMoves(moves, enemyPieces | friendlyPieces, board.CanWhiteCastleKingside(), board.CanWhiteCastleQueenside(), board.CanBlackCastleKingside(), board.CanBlackCastleQueenside(), false);
         
         return moves;
     }
 
-    private List<Move> GenerateKingMoves(List<Move> moves, ulong kingBitboard, ulong friendlyPieces, ulong enemyPieces, bool white)
+    private List<Move> GenerateKingMoves(List<Move> moves, ulong kingBitboard, ulong friendlyPieces, ulong enemyPieces, bool white, bool capturesOnly = false)
     {
         ulong kingLSB = BitboardUtility.IsolateLSB(kingBitboard);
         int kingPosition = BitboardUtility.IndexOfLSB(kingLSB);
 
         ulong targets = MoveGenData.kingTargets[kingPosition];
+
+        // Must we only generate capturing moves
+        if (capturesOnly)
+        {
+            targets &= enemyPieces;
+        }
+
         BitboardUtility.ForEachBitscanForward(targets, (targetSquare) =>
         {
             ulong targetBB = 1ul << targetSquare;
@@ -174,7 +187,15 @@ public class MoveGen : IBoardListener
             else unsafeMove = false;
 
             // Generate attacks
-            ulong attackTargets = MoveGenData.blackPawnAttacks[startingIndex] & enemyPieces & captureMask; 
+            ulong attackTargets = MoveGenData.blackPawnAttacks[startingIndex];
+
+            // Cache the attack bitboard
+            blackPawnAttackBitboard = attackTargets;
+            hasCachedBlackPawnAttackBitboard = true;
+
+            // Can only attack enemy pieces which are on the capture mask
+            attackTargets &= enemyPieces & captureMask; 
+
             BitboardUtility.ForEachBitscanForward(attackTargets, (targetIndex) => 
             {
                 PieceType capturedPiece = board.GetPieceType(targetIndex);
@@ -336,7 +357,15 @@ public class MoveGen : IBoardListener
             else unsafeMove = false;
 
             // Generate attacks
-            ulong attackTargets = MoveGenData.whitePawnAttacks[startingIndex] & enemyPieces & captureMask; 
+            ulong attackTargets = MoveGenData.whitePawnAttacks[startingIndex];
+
+            // Cache the attack bitboard
+            whitePawnAttackBitboard = attackTargets;
+            hasCachedWhitePawnAttackBitboard = true;
+
+            // Can only capture enemy pieces that are on the capture mask
+            attackTargets &= enemyPieces & captureMask; 
+
             BitboardUtility.ForEachBitscanForward(attackTargets, (targetIndex) => 
             {
                 PieceType capturedPiece = board.GetPieceType(targetIndex);
@@ -461,7 +490,7 @@ public class MoveGen : IBoardListener
         return moves;
     }
 
-    public List<Move> GenerateQueenMoves(List<Move> moves, ulong queenBitboard, ulong friendlyPieces, ulong enemyPieces, bool white)
+    public List<Move> GenerateQueenMoves(List<Move> moves, ulong queenBitboard, ulong friendlyPieces, ulong enemyPieces, bool white, bool captureOnly = false)
     {
         bool unsafeMove;
 
@@ -477,6 +506,13 @@ public class MoveGen : IBoardListener
         {
             captureMask = kingAttackers;
             pushMask = MoveGenData.inBetweenLookupTable[white ? board.WhiteKingSquare : board.BlackKingSquare][BitboardUtility.IndexOfLSB(kingAttackers)];
+        }
+
+        // Must we only generate captures?
+        if (captureOnly)
+        {
+            captureMask &= enemyPieces;
+            pushMask &= enemyPieces;
         }
 
         ulong queenLSB = BitboardUtility.IsolateLSB(queenBitboard);
@@ -523,7 +559,7 @@ public class MoveGen : IBoardListener
         return moves;
     }
 
-    public List<Move> GenerateKnightMoves(List<Move> moves, ulong knightBitboard, ulong friendlyPieces, ulong enemyPieces, bool white)
+    public List<Move> GenerateKnightMoves(List<Move> moves, ulong knightBitboard, ulong friendlyPieces, ulong enemyPieces, bool white, bool capturesOnly = false)
     {
         bool unsafeMove;
 
@@ -539,6 +575,13 @@ public class MoveGen : IBoardListener
         {
             captureMask = kingAttackers;
             pushMask = MoveGenData.inBetweenLookupTable[white ? board.WhiteKingSquare : board.BlackKingSquare][BitboardUtility.IndexOfLSB(kingAttackers)];
+        }
+
+        // Must we only generate captures?
+        if (capturesOnly)
+        {
+            captureMask &= enemyPieces;
+            pushMask &= enemyPieces;
         }
 
         ulong knightLSB = BitboardUtility.IsolateLSB(knightBitboard);
@@ -585,7 +628,7 @@ public class MoveGen : IBoardListener
     /// <summary>
     /// Generates a list of legal bishop moves for the given coloured player.
     /// </summary>
-    public List<Move> GenerateBishopMoves(List<Move> moves, ulong bishopBitboard, ulong friendlyPieces, ulong enemyPieces, bool white) 
+    public List<Move> GenerateBishopMoves(List<Move> moves, ulong bishopBitboard, ulong friendlyPieces, ulong enemyPieces, bool white, bool capturesOnly = false) 
     {
         bool unsafeMove;
         ulong kingAttackers = board.GetKingAttackers(board.IsWhiteToMove);
@@ -600,6 +643,13 @@ public class MoveGen : IBoardListener
         {
             captureMask = kingAttackers;
             pushMask = MoveGenData.inBetweenLookupTable[white ? board.WhiteKingSquare : board.BlackKingSquare][BitboardUtility.IndexOfLSB(kingAttackers)];
+        }
+
+        // Must we only generate captures?
+        if (capturesOnly)
+        {
+            captureMask &= enemyPieces;
+            pushMask &= enemyPieces;
         }
 
         ulong bishopLSB = BitboardUtility.IsolateLSB(bishopBitboard);
@@ -647,7 +697,7 @@ public class MoveGen : IBoardListener
     /// <summary>
     /// Generates a list of legal rook moves for the given coloured played.
     /// </summary>
-    public List<Move> GenerateRookMoves(List<Move> moves, ulong rookBitboard, ulong friendlyPieces, ulong enemyPieces, bool white)
+    public List<Move> GenerateRookMoves(List<Move> moves, ulong rookBitboard, ulong friendlyPieces, ulong enemyPieces, bool white, bool capturesOnly = false)
     {
         bool unsafeMove;
 
@@ -663,6 +713,12 @@ public class MoveGen : IBoardListener
         {
             captureMask = kingAttackers;
             pushMask = MoveGenData.inBetweenLookupTable[white ? board.WhiteKingSquare : board.BlackKingSquare][BitboardUtility.IndexOfLSB(kingAttackers)];
+        }
+
+        if (capturesOnly)
+        {
+            captureMask &= enemyPieces;
+            pushMask &= enemyPieces;
         }
 
         ulong rookLSB = BitboardUtility.IsolateLSB(rookBitboard);
@@ -724,12 +780,41 @@ public class MoveGen : IBoardListener
         return pinnedPieces;
     }
 
+    public ulong BlackPawnAttackBitboard(ulong blackPawnBitboard)
+    {
+        if (hasCachedBlackPawnAttackBitboard) return blackPawnBitboard;
+
+        BitboardUtility.ForEachBitscanForward(blackPawnBitboard, pawnIndex =>
+        {
+            blackPawnAttackBitboard |= MoveGenData.blackPawnAttacks[pawnIndex];
+        });
+
+        hasCachedBlackPawnAttackBitboard = true;
+        return blackPawnAttackBitboard;
+    }
+
+    public ulong WhitePawnAttackBitboard(ulong whitePawnBitboard)
+    {
+        if (hasCachedWhitePawnAttackBitboard) return whitePawnAttackBitboard;
+
+        BitboardUtility.ForEachBitscanForward(whitePawnBitboard, pawnIndex => {
+            whitePawnAttackBitboard |= MoveGenData.whitePawnAttacks[pawnIndex];
+        });
+
+        hasCachedWhitePawnAttackBitboard = true;
+        return whitePawnAttackBitboard;
+    }
+
     public void OnBoardStateChange()
     {
         legalMoves = new();
         hasCachedLegalMoves = false;
         hasCachedPinnedPieces = new();
         hasCachedPinnedPieces = false;
+        whitePawnAttackBitboard = 0ul;
+        hasCachedWhitePawnAttackBitboard = false;
+        blackPawnAttackBitboard = 0ul;
+        hasCachedBlackPawnAttackBitboard = false;
     }
 
 }

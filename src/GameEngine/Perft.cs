@@ -32,14 +32,14 @@ static class Perft
     static int captures = 0;
     static int enPassants = 0;
 
-    public static int DividePerftTest(Board board, int depth, bool verbose = true)
+    public static int DividePerftTest(Board board, int depth, bool verbose = true, bool capturesOnly = false)
     {
         System.Diagnostics.Stopwatch stopwatch = new();
         stopwatch.Start();
 
         int nodes = 0;
 
-        Move[] legalMoves = board.GetLegalMoves();
+        Move[] legalMoves = board.GetLegalMoves(capturesOnly);
 
         foreach (Move move in legalMoves)
         {
@@ -56,13 +56,13 @@ static class Perft
         return nodes;
     }
 
-    public static int SimplePerftTest(Board board, int depth)
+    public static int SimplePerftTest(Board board, int depth, bool capturesOnly = false)
     {
         if ( depth == 0 ) return 1;
 
         int nodes = 0;
 
-        Move[] legalMoves = board.GetLegalMoves();
+        Move[] legalMoves = board.GetLegalMoves(capturesOnly);
         if (legalMoves.Length == 0)
         {
             return 0;
@@ -79,7 +79,6 @@ static class Perft
 
         return nodes;
     }
-
 
     public static PerftResult PerftTest(Board board, int depth)
     {

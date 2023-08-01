@@ -1,0 +1,9 @@
+Search:
+    - Negamax, alpha-beta pruning, fail hard
+    - Iterative deepening
+        - 5s time limit
+Transposition Table:
+    - Replacement Scheme:
+        - If transposition depth >= current depth 
+    - Does not store best move
+ 

@@ -21,6 +21,8 @@ public static class MoveUtility
 
     public static Move ConvertFromAlgebraic(string algebraicMove, Board board)
     {
+        algebraicMove = algebraicMove.Trim();
+
         // from:
         char fileFrom = algebraicMove[0];
         char rankFrom = algebraicMove[1];

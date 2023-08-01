@@ -6,6 +6,7 @@ class UCI
     public const string EngineName = "Nate's C# ChessBot";
 
     private static Board board = new();
+    private static IChessBot bot = new MyBot();
 
     public static void Main(string[] args)
     {
@@ -31,7 +32,9 @@ class UCI
             if (input.StartsWith("move")) InputMove(input);
             if (input == "fen") InputFen();
             if (input == "bitboards") InputBitboards();
+            if (input == "zobrist") InputZobrist();
             if (input == "test perft") InputTestPerft();
+            if (input == "transposition table stats") InputTranspositionTableStats();
             if (input == "quit") InputQuit();
         }
     }
@@ -41,6 +44,18 @@ class UCI
         Console.WriteLine("id name " + EngineName);
         Console.WriteLine("id author Nathan Macdonald");
         Console.WriteLine("uci ok");
+    }
+
+    static void InputZobrist()
+    {
+        Console.WriteLine(board.ZobristHash);
+    }
+
+    static void InputTranspositionTableStats()
+    {
+        Console.WriteLine("Transposition table contains " + ((MyBot)bot).tTable.PopCount() + " transposition.");
+        Console.WriteLine("Transposition table is " + ((MyBot)bot).tTable.PercentageFull() + "% full.");
+        Console.WriteLine("There have been " + ((MyBot)bot).tTable.collisions + " collisions.");
     }
 
     static void InputTestPerft()
@@ -67,7 +82,10 @@ class UCI
 
     static void InputIsReady()
     {
-        Console.WriteLine("ready ok");
+        if (board != null && bot != null)
+        {
+            Console.WriteLine("ready ok");
+        }
     }
 
     static void InputUCINewGame()
@@ -98,27 +116,46 @@ class UCI
         if (input.Contains("moves"))
         {
             input = input[(input.IndexOf("moves")+6)..];
-            Console.WriteLine(input);
-            Console.WriteLine(input.Length);
-            for (int i = 0; i < input.Length; i+=5)
+            string[] moves = input.Split(" ");
+            foreach (string algebraicMove in moves)
             {
-               string algebraicMove = input.Substring(i, 4);
-               Console.WriteLine(algebraicMove);
-               Move move = MoveUtility.ConvertFromAlgebraic(algebraicMove, board);
-               board.MakeMove(move);
+                if (algebraicMove.Trim().Length > 0)
+                {
+                    Move move = MoveUtility.ConvertFromAlgebraic(algebraicMove, board);
+                    board.MakeMove(move);
+                }
             }
         }
     }
 
     static void InputGo(string input)
     {
-        input = input[3..];
-
-        if (input.StartsWith("perft"))
+        if (input.StartsWith("go perft"))
         {
-            int depth = int.Parse(input.Split(" ")[1]);
-            int nodes = Perft.DividePerftTest(board, depth);
-            Console.WriteLine("Nodes visitied: " + nodes);
+            if (input.Contains("capturesonly"))
+            {
+                input = input[3..];
+                int depth = int.Parse(input.Split(" ")[1]);
+                int nodes = Perft.DividePerftTest(board, depth, true, true);
+                Console.WriteLine("Nodes visitied: " + nodes);
+            }
+            else
+            {
+                input = input[3..];
+                int depth = int.Parse(input.Split(" ")[1]);
+                int nodes = Perft.DividePerftTest(board, depth);
+                Console.WriteLine("Nodes visitied: " + nodes);
+            }
+        }
+        else if (input.StartsWith("go infinite"))
+        {
+            Move bestMove = bot.GetBestMove(board, int.MaxValue);
+            Console.WriteLine("bestmove " + bestMove.ToString());
+        }
+        else
+        {
+            Move bestMove = bot.GetBestMove(board, 5000);
+            Console.WriteLine("bestmove " + bestMove.ToString());
         }
     }
 

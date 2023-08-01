@@ -1,5 +1,6 @@
 namespace ChessBot;
 
+using System.ComponentModel;
 using System.Net.WebSockets;
 using System.Reflection.Metadata;
 using System.Runtime.Intrinsics.X86;
@@ -14,6 +15,8 @@ public sealed class Board
     private bool CWK, CWQ, CBQ, CBK;
 
     private bool isWhiteToMove;
+
+    private ulong zobristHash;
 
     // CACHE:
     private ulong whiteAttackBitboard;
@@ -86,6 +89,8 @@ public sealed class Board
         fullMoveCount = fenParser.fullMoveCount;
 
         isWhiteToMove = fenParser.isWhiteToMove;
+
+        zobristHash = Zobrist.GetZobristHash(this);
     }
 
     /// <summary>
@@ -96,7 +101,7 @@ public sealed class Board
     {
 
         // Push state data to stack before making the move
-        stateHistory.Push(new StateData(move, CWK, CWQ, CBK, CBQ, epFile, fullMoveCount, halfMoveCount));
+        stateHistory.Push(new StateData(move, CWK, CWQ, CBK, CBQ, epFile, fullMoveCount, halfMoveCount, zobristHash));
 
         int to = move.To;
         int from = move.From;
@@ -107,7 +112,42 @@ public sealed class Board
         PieceType movingPiece = move.MovingPiece;
         PieceType capturedPiece = move.CapturedPiece;
 
+
         bool white = MoveUtility.GetPieceColour(movingPiece) == 0;
+
+        ulong newZobristHash = zobristHash;
+        bool prevCWK = CWK;
+        bool prevCWQ = CWQ;
+        bool prevCBK = CBK;
+        bool prevCBQ = CBQ;
+        ulong prevEnPasantFile = 0ul;
+        switch (epFile)
+        {
+            case 0x101010101010101ul:
+                prevEnPasantFile = 0;
+                break;
+            case 0x202020202020202ul:
+                prevEnPasantFile = 1;
+                break;
+            case 0x404040404040404ul:
+                prevEnPasantFile = 2;
+                break;
+            case 0x808080808080808ul:
+                prevEnPasantFile = 3;
+                break;
+            case 0x1010101010101010ul:
+                prevEnPasantFile = 4;
+                break;
+            case 0x2020202020202020ul:
+                prevEnPasantFile = 5;
+                break;
+            case 0x4040404040404040ul:
+                prevEnPasantFile = 6;
+                break;
+            case 0x8080808080808080ul:
+                prevEnPasantFile = 7;
+                break;
+        }
 
         // Clear en passant file
         epFile = 0;
@@ -115,10 +155,12 @@ public sealed class Board
         // Update the moving piece's bitboard
 
         bitboards[(int)movingPiece] ^= fromBitboard;
+        newZobristHash ^= Zobrist.zArray[(int)movingPiece][from];
 
         if (!move.IsPromotion())
         {
             bitboards[(int)movingPiece] ^= toBitboard;
+            newZobristHash ^= Zobrist.zArray[(int)movingPiece][to];
 
         }
         else
@@ -127,18 +169,22 @@ public sealed class Board
                 case Move.KnightPromoCaptureFlag:
                 case Move.KnightPromotionFlag:
                     bitboards[isWhiteToMove ? (int)PieceType.WN : (int)PieceType.BN] ^= toBitboard;
+                    newZobristHash ^= Zobrist.zArray[isWhiteToMove ? (int)PieceType.WN : (int)PieceType.BN][to];
                     break;
                 case Move.BishopPromoCaptureFlag:
                 case Move.BishopPromotionFlag:
                     bitboards[isWhiteToMove ? (int)PieceType.WB : (int)PieceType.BB] ^= toBitboard;
+                    newZobristHash ^= Zobrist.zArray[isWhiteToMove ? (int)PieceType.WB : (int)PieceType.BB][to];
                     break;
                 case Move.RookPromoCaptureFlag:
                 case Move.RookPromotionFlag:
                     bitboards[isWhiteToMove ? (int)PieceType.WR : (int)PieceType.BR] ^= toBitboard;
+                    newZobristHash ^= Zobrist.zArray[isWhiteToMove ? (int)PieceType.WR : (int)PieceType.BR][to];
                     break;
                 case Move.QueenPromoCaptureFlag:
                 case Move.QueenPromotionFlag:
                     bitboards[isWhiteToMove ? (int)PieceType.WQ : (int)PieceType.BQ] ^= toBitboard;
+                    newZobristHash ^= Zobrist.zArray[isWhiteToMove ? (int)PieceType.WQ : (int)PieceType.BQ][to];
                     break;
             }
         }
@@ -148,18 +194,60 @@ public sealed class Board
         {
             CWK = false;
             CWQ = false;
+            if (prevCWK != CWK)
+            {
+                newZobristHash ^= Zobrist.zCastle[0];
+            }
+            if (prevCWQ != CWQ)
+            {
+                newZobristHash ^= Zobrist.zCastle[1];
+            }
         }
         else if (movingPiece == PieceType.BK)
         {
             CBK = false;
             CBQ = false;
+            if (prevCBK != CBK)
+            {
+                newZobristHash ^= Zobrist.zCastle[2];
+            }
+            if (prevCBQ != CBQ)
+            {
+                newZobristHash ^= Zobrist.zCastle[3];
+            }
         }
         else
         {
-            if (from == 63) CWK = false;
-            else if (from == 56) CWQ = false;
-            else if (from == 7) CBK = false;
-            else if (from == 0) CBQ = false;
+            if (from == 63) {
+                CWK = false;
+                if (prevCWK != CWK)
+                {
+                    newZobristHash ^= Zobrist.zCastle[0];
+                }
+            }
+            else if (from == 56)
+            {
+                CWQ = false;
+                if (prevCWQ != CWQ)
+                {
+                    newZobristHash ^= Zobrist.zCastle[1];
+                }
+            } 
+            else if (from == 7) {
+                CBK = false;
+                if (prevCBK != CBK)
+                {
+                    newZobristHash ^= Zobrist.zCastle[2];
+                }
+            }
+            else if (from == 0) 
+            {
+                CBQ = false;
+                if (prevCBQ != CBQ)
+                {
+                    newZobristHash ^= Zobrist.zCastle[3];
+                }
+            }
         } 
 
         if (move.IsCapture())
@@ -167,16 +255,46 @@ public sealed class Board
             if (move.IsEnPassant())
             {
                 bitboards[(int)capturedPiece] ^= isWhiteToMove ? toBitboard << 8 : toBitboard >> 8;
+                newZobristHash ^= Zobrist.zArray[(int)capturedPiece][isWhiteToMove ? to + 8 : to - 8];
             }
             else
             {
                 bitboards[(int)capturedPiece] ^= toBitboard;
+                newZobristHash ^= Zobrist.zArray[(int)capturedPiece][to];
             }
 
-            if (to == 63) CWK = false;
-            else if (to == 56) CWQ = false;
-            else if (to == 7) CBK = false;
-            else if (to == 0) CBQ = false;
+            if (to == 63) 
+            {
+                CWK = false;
+                if (prevCWK != CWK)
+                {
+                    newZobristHash ^= Zobrist.zCastle[0];
+                }
+            }
+            else if (to == 56) 
+            {
+                CWQ = false;
+                if (prevCWQ != CWQ)
+                {
+                    newZobristHash ^= Zobrist.zCastle[1];
+                }
+            }
+            else if (to == 7) 
+            {
+                CBK = false;
+                if (prevCBK != CBK)
+                {
+                    newZobristHash ^= Zobrist.zCastle[2];
+                }
+            }
+            else if (to == 0)
+            {
+                CBQ = false;
+                if (prevCBQ != CBQ)
+                {
+                    newZobristHash ^= Zobrist.zCastle[3];
+                }
+            } 
         }
         else if (move.IsDoublePawnPush())
         {
@@ -189,11 +307,13 @@ public sealed class Board
             {
                 bitboards[(int)PieceType.WR] ^= 0b101ul << 61;
                 CWK = false;
+                newZobristHash ^= Zobrist.zCastle[0];
             }
             else
             {
                 bitboards[(int)PieceType.BR] ^= 0b10100000ul;
                 CBK = false;
+                newZobristHash ^= Zobrist.zCastle[2];
             }
         }
         else if (move.IsQueensideCastle())
@@ -203,11 +323,13 @@ public sealed class Board
             {
                 bitboards[(int)PieceType.WR] ^= 0b1001ul << 56;
                 CWQ = false;
+                newZobristHash ^= Zobrist.zCastle[1];
             }
             else
             {
                 bitboards[(int)PieceType.BR] ^= 0b1001ul;
                 CBQ = false;
+                newZobristHash ^= Zobrist.zCastle[3];
             }
         }
 
@@ -218,6 +340,11 @@ public sealed class Board
             halfMoveCount++;
         }
         if (halfMoveCount % 2 == 0) fullMoveCount++;
+
+        newZobristHash ^= Zobrist.zBlackMove;
+        newZobristHash ^= Zobrist.zEnPassant[prevEnPasantFile];
+
+        zobristHash = newZobristHash;
 
         // Clear cached data
         ClearCaches();
@@ -305,6 +432,9 @@ public sealed class Board
         epFile = previousState.epFile;
         halfMoveCount = previousState.halfMoveCount;
         fullMoveCount = previousState.fullMoveCount;
+        zobristHash = previousState.zobristHash;
+
+        listeners.ForEach(listener => listener.OnBoardStateChange());
     }
 
     /// <summary>
@@ -338,6 +468,8 @@ public sealed class Board
     /// Returns true if black has queenside castling permission, false otherwise.
     /// </summary>
     public bool CanBlackCastleQueenside() { return CBQ; }
+
+    public ulong ZobristHash => zobristHash;
 
     public int WhiteKingSquare
     {
@@ -427,6 +559,11 @@ public sealed class Board
                 blackUnsafeKingSquares |= MoveGenHelper.QueenAttacks(AllPiecesBitboard^GetBitboardByPieceType(PieceType.BK), square);
             });
 
+            BitboardUtility.ForEachBitscanForward(wkOcc, (square) => {
+                whiteAttackBitboard |= MoveGenData.kingTargets[square];
+            });
+
+
             blackUnsafeKingSquares |= whiteAttackBitboard;
 
             hasCachedWhiteAttackBitboard = true;
@@ -468,6 +605,10 @@ public sealed class Board
 
             BitboardUtility.ForEachBitscanForward(bqOcc, (square) => {
                 whiteUnsafeKingSquares |= MoveGenHelper.QueenAttacks(AllPiecesBitboard^GetBitboardByPieceType(PieceType.WK), square);
+            });
+
+            BitboardUtility.ForEachBitscanForward(bkOcc, (square) => {
+                whiteUnsafeKingSquares |= MoveGenData.kingTargets[square];
             });
 
             hasCachedWhiteUnsafeKingSquares = true;
@@ -514,6 +655,10 @@ public sealed class Board
                 whiteUnsafeKingSquares |= MoveGenHelper.QueenAttacks(AllPiecesBitboard^GetBitboardByPieceType(PieceType.WK), square);
             });
 
+            BitboardUtility.ForEachBitscanForward(bkOcc, (square) => {
+                blackAttackBitboard |= MoveGenData.kingTargets[square];
+            });
+
             whiteUnsafeKingSquares |= blackAttackBitboard;
 
             hasCachedWhiteUnsafeKingSquares = true;
@@ -557,6 +702,10 @@ public sealed class Board
                 blackUnsafeKingSquares |= MoveGenHelper.QueenAttacks(AllPiecesBitboard^GetBitboardByPieceType(PieceType.BK), square);
             });
 
+            BitboardUtility.ForEachBitscanForward(wkOcc, (square) => {
+                blackUnsafeKingSquares |= MoveGenData.kingTargets[square];
+            });
+
             hasCachedBlackUnsafeKingSquares = true;
             return blackUnsafeKingSquares;
         }
@@ -580,9 +729,9 @@ public sealed class Board
         hasCachedKingAttackers = false;
     }
 
-    public Move[] GetLegalMoves()
+    public Move[] GetLegalMoves(bool capturesOnly = false)
     {
-        return moveGen.GenerateLegalMoves().ToArray();
+        return moveGen.GenerateLegalMoves(capturesOnly).ToArray();
     }
 
     public bool IsMoveLegal(Move move)
@@ -651,6 +800,11 @@ public sealed class Board
                 Environment.Exit(0);
             }
         }
+    }
+
+    public bool SquareIsUnderAttackByEnemyPawn(int square)
+    {
+        return BitboardUtility.IsBitSet(isWhiteToMove ? moveGen.BlackPawnAttackBitboard(bitboards[(int)PieceType.BP]) : moveGen.WhitePawnAttackBitboard(bitboards[(int)PieceType.WP]), square);
     }
 
     public bool SquareIsUnderEnemyAttack(int square)

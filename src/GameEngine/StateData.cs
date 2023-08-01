@@ -4,10 +4,10 @@ class StateData
 {
     public Move lastMove;
     public bool CWK, CWQ, CBK, CBQ;
-    public ulong epFile;
+    public ulong epFile, zobristHash;
     public int fullMoveCount, halfMoveCount;
 
-    public StateData(Move lastMove, bool CWK, bool CWQ, bool CBK, bool CBQ, ulong epFile, int fullMoveCount, int halfMoveCount)
+    public StateData(Move lastMove, bool CWK, bool CWQ, bool CBK, bool CBQ, ulong epFile, int fullMoveCount, int halfMoveCount, ulong zobristHash)
     {
         this.lastMove = lastMove;;
         this.CWK = CWK;
@@ -17,5 +17,6 @@ class StateData
         this.epFile = epFile;
         this.halfMoveCount = halfMoveCount;
         this.fullMoveCount = fullMoveCount;
+        this.zobristHash = zobristHash;
     }
 }
