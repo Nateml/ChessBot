@@ -17,7 +17,7 @@ public static class TimeManager
     {
         int nMoves = Math.Min(movesPlayed, 10);
         double factor = movesPlayed < 5 ? 0.5 : 2 - nMoves / 10;
-        int target = timeLeft / 50;
+        int target = timeLeft / 30;
         return (int)(factor * target);
     }
 
