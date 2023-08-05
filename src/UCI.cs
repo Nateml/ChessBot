@@ -179,12 +179,13 @@ class UCI
         }
         else
         {
-            int timeLeft = 600000; // Assume 10 minute game
+            int timeLeft = 300000; // Assume 5 minute game
             if (board.IsWhiteToMove)
             {
                 if (input.Contains("wtime"))
                 {
-                    timeLeft = int.Parse(input[(input.IndexOf("winc") + 5)..].Split(" ")[0]);
+                    string[] words = input[(input.IndexOf("wtime") + 5)..].Split(" ");
+                    timeLeft = int.Parse(words[1].Trim());
                 }
             }
             else
@@ -192,8 +193,6 @@ class UCI
                 if (input.Contains("btime"))
                 {
                     string[] words = input[(input.IndexOf("btime") + 5)..].Split(" ");
-                    Console.WriteLine(words[0]);
-                    Console.WriteLine(words[1]);
                     timeLeft = int.Parse(words[1].Trim());
                 }
             }

@@ -754,13 +754,26 @@ public sealed class Board
         return moveGen.GenerateLegalMoves(capturesOnly).ToArray();
     }
 
-    public bool IsMoveLegal(Move move)
+    public bool DoesMoveNotPutOwnKingInCheck(Move move)
     {
         MakeMove(move);
         bool inCheck = IsKingInCheck(!isWhiteToMove);
         UnmakeMove();
 
         return !inCheck;
+    }
+
+    public bool IsMoveLegal(Move move)
+    {
+        // Check that we have a piece on that square
+        if (((1ul << move.From) & (IsWhiteToMove ? WhitePiecesBitboard : BlackPiecesBitboard)) == 0) return false;
+
+        // Check that there isn't a friendly piece on that square
+        if (((1ul << move.To) & (IsWhiteToMove ? WhitePiecesBitboard : BlackPiecesBitboard)) != 0) return false;
+
+        if (!DoesMoveNotPutOwnKingInCheck(move)) return false;
+
+        return true;
     }
 
     public bool IsKingInCheck(bool white)

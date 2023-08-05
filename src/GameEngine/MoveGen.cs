@@ -134,13 +134,13 @@ public class MoveGen : IBoardListener
             if (CWK && ((0b11ul << 61) & allPieces) == 0 && ((0b1ul << 61) & board.BlackAttackBitboard) == 0)
             {
                 Move move = new(60, 62, PieceType.WK, PieceType.EMPTY, Move.KingCastleFlag);
-                if (board.IsMoveLegal(move)) moves.Add(move);
+                if (board.DoesMoveNotPutOwnKingInCheck(move)) moves.Add(move);
             }
 
             if (CWQ && ((0b111ul << 57) & allPieces) == 0 && ((0b11ul << 58) & board.BlackAttackBitboard) == 0)
             {
                 Move move = new(60, 58, PieceType.WK, PieceType.EMPTY, Move.QueenCastleFlag);
-                if (board.IsMoveLegal(move)) moves.Add(move);
+                if (board.DoesMoveNotPutOwnKingInCheck(move)) moves.Add(move);
             }
         }
         else
@@ -148,13 +148,13 @@ public class MoveGen : IBoardListener
             if (CBK && ((0b1100000ul & allPieces) == 0) && ((0b100000ul & board.WhiteAttackBitboard) == 0))
             {
                 Move move = new(4, 6, PieceType.BK, PieceType.EMPTY, Move.KingCastleFlag);
-                if (board.IsMoveLegal(move)) moves.Add(move);
+                if (board.DoesMoveNotPutOwnKingInCheck(move)) moves.Add(move);
             }
 
             if (CBQ && ((0b1110ul & allPieces) == 0) && ((0b1100) & board.WhiteAttackBitboard) == 0)
             {
                 Move move = new(4, 2, PieceType.BK, PieceType.EMPTY, Move.QueenCastleFlag);
-                if (board.IsMoveLegal(move)) moves.Add(move);
+                if (board.DoesMoveNotPutOwnKingInCheck(move)) moves.Add(move);
             }
         }
 
@@ -206,7 +206,7 @@ public class MoveGen : IBoardListener
                     if (unsafeMove)
                     {
                         Move legalityTest = new(startingIndex, targetIndex, PieceType.BP, capturedPiece, Move.KnightPromoCaptureFlag);
-                        if (board.IsMoveLegal(legalityTest))
+                        if (board.DoesMoveNotPutOwnKingInCheck(legalityTest))
                         {
                             moves.Add(new Move(startingIndex, targetIndex, PieceType.BP, capturedPiece, Move.KnightPromoCaptureFlag));
                             moves.Add(new Move(startingIndex, targetIndex, PieceType.BP, capturedPiece, Move.BishopPromoCaptureFlag));
@@ -229,7 +229,7 @@ public class MoveGen : IBoardListener
                     if (!unsafeMove) moves.Add(move);
                     else
                     {
-                        if (board.IsMoveLegal(move))
+                        if (board.DoesMoveNotPutOwnKingInCheck(move))
                         {
                             moves.Add(move);
                         }
@@ -248,13 +248,13 @@ public class MoveGen : IBoardListener
                 if (((thisPawnBitboard << 1) & epFile) != 0 && (thisPawnBitboard & MoveGenData.RankMasks[3]) != 0 && (thisPawnBitboard & MoveGenData.FileMasks[7]) == 0)
                 {
                     Move move = new(startingIndex, startingIndex+9, PieceType.BP, PieceType.WP, Move.EpCaptureFlag);
-                    if (board.IsMoveLegal(move)) moves.Add(move);
+                    if (board.DoesMoveNotPutOwnKingInCheck(move)) moves.Add(move);
                 }
 
                 if (((thisPawnBitboard >> 1) & epFile) != 0 && (thisPawnBitboard & MoveGenData.RankMasks[3]) != 0 & (thisPawnBitboard & MoveGenData.FileMasks[0]) == 0)
                 {
                     Move move = new(startingIndex, startingIndex+7, PieceType.BP, PieceType.WP, Move.EpCaptureFlag);
-                    if (board.IsMoveLegal(move)) moves.Add(move);
+                    if (board.DoesMoveNotPutOwnKingInCheck(move)) moves.Add(move);
                 }
             }
 
@@ -278,7 +278,7 @@ public class MoveGen : IBoardListener
                     }
                     else
                     {
-                        if (board.IsMoveLegal(move))
+                        if (board.DoesMoveNotPutOwnKingInCheck(move))
                         {
                             moves.Add(move);
                         }
@@ -299,7 +299,7 @@ public class MoveGen : IBoardListener
                     if (unsafeMove)
                     {
                         Move legalityTest = new(startingIndex, targetIndex, PieceType.BP, PieceType.EMPTY, Move.KnightPromotionFlag);
-                        if (board.IsMoveLegal(legalityTest))
+                        if (board.DoesMoveNotPutOwnKingInCheck(legalityTest))
                         {
                             moves.Add(new Move(startingIndex, targetIndex, PieceType.BP, PieceType.EMPTY, Move.KnightPromotionFlag));
                             moves.Add(new Move(startingIndex, targetIndex, PieceType.BP, PieceType.EMPTY, Move.BishopPromotionFlag));
@@ -321,7 +321,7 @@ public class MoveGen : IBoardListener
                     if (!unsafeMove) moves.Add(move);
                     else
                     {
-                        if (board.IsMoveLegal(move)) moves.Add(move);
+                        if (board.DoesMoveNotPutOwnKingInCheck(move)) moves.Add(move);
                     }
                 }
             }
@@ -376,7 +376,7 @@ public class MoveGen : IBoardListener
                     if (unsafeMove)
                     {
                         Move legalityTest = new(startingIndex, targetIndex, PieceType.WP, capturedPiece, Move.KnightPromoCaptureFlag);
-                        if (board.IsMoveLegal(legalityTest))
+                        if (board.DoesMoveNotPutOwnKingInCheck(legalityTest))
                         {
                             moves.Add(new Move(startingIndex, targetIndex, PieceType.WP, capturedPiece, Move.KnightPromoCaptureFlag));
                             moves.Add(new Move(startingIndex, targetIndex, PieceType.WP, capturedPiece, Move.BishopPromoCaptureFlag));
@@ -398,7 +398,7 @@ public class MoveGen : IBoardListener
                     if (!unsafeMove) moves.Add(move);
                     else
                     {
-                        if (board.IsMoveLegal(move)) moves.Add(move);
+                        if (board.DoesMoveNotPutOwnKingInCheck(move)) moves.Add(move);
                     }
                 }
             });
@@ -413,13 +413,13 @@ public class MoveGen : IBoardListener
                 if (((thisPawnBitboard << 1) & epFile) != 0 && (thisPawnBitboard & MoveGenData.RankMasks[4]) != 0 && (thisPawnBitboard & MoveGenData.FileMasks[7]) == 0)
                 {
                     Move move = new(startingIndex, startingIndex-7, PieceType.WP, PieceType.BP, Move.EpCaptureFlag);
-                    if (board.IsMoveLegal(move)) moves.Add(move);
+                    if (board.DoesMoveNotPutOwnKingInCheck(move)) moves.Add(move);
                 }
 
                 if (((thisPawnBitboard >> 1) & epFile) != 0 && (thisPawnBitboard & MoveGenData.RankMasks[4]) != 0 && (thisPawnBitboard & MoveGenData.FileMasks[0]) == 0)
                 {
                     Move move = new(startingIndex, startingIndex-9, PieceType.WP, PieceType.BP, Move.EpCaptureFlag);
-                    if (board.IsMoveLegal(move)) moves.Add(move);
+                    if (board.DoesMoveNotPutOwnKingInCheck(move)) moves.Add(move);
                 }
             }
 
@@ -441,7 +441,7 @@ public class MoveGen : IBoardListener
                     if (!unsafeMove) moves.Add(move);
                     else
                     {
-                        if (board.IsMoveLegal(move)) moves.Add(move);
+                        if (board.DoesMoveNotPutOwnKingInCheck(move)) moves.Add(move);
                     }
                 }
             }
@@ -459,7 +459,7 @@ public class MoveGen : IBoardListener
                     if (unsafeMove)
                     {
                         Move legalityTest = new(startingIndex, targetIndex, PieceType.WP, PieceType.EMPTY, Move.KnightPromotionFlag);
-                        if (board.IsMoveLegal(legalityTest)) 
+                        if (board.DoesMoveNotPutOwnKingInCheck(legalityTest)) 
                         {
                             moves.Add(new Move(startingIndex, targetIndex, PieceType.WP, PieceType.EMPTY, Move.KnightPromotionFlag));
                             moves.Add(new Move(startingIndex, targetIndex, PieceType.WP, PieceType.EMPTY, Move.BishopPromotionFlag));
@@ -481,7 +481,7 @@ public class MoveGen : IBoardListener
                     if (!unsafeMove) moves.Add(move);
                     else
                     {
-                        if (board.IsMoveLegal(move)) moves.Add(move);
+                        if (board.DoesMoveNotPutOwnKingInCheck(move)) moves.Add(move);
                     }
                 }
             }
@@ -544,7 +544,7 @@ public class MoveGen : IBoardListener
                     if (!unsafeMove) moves.Add(move);
                     else
                     {
-                        if (board.IsMoveLegal(move)) moves.Add(move);
+                        if (board.DoesMoveNotPutOwnKingInCheck(move)) moves.Add(move);
                     }
                 }
 
@@ -610,7 +610,7 @@ public class MoveGen : IBoardListener
                     if (!unsafeMove) moves.Add(move);
                     else
                     {
-                        if (board.IsMoveLegal(move)) moves.Add(move);
+                        if (board.DoesMoveNotPutOwnKingInCheck(move)) moves.Add(move);
                     }
                 }
 
@@ -679,7 +679,7 @@ public class MoveGen : IBoardListener
                     if (!unsafeMove) moves.Add(move);
                     else 
                     {
-                        if (board.IsMoveLegal(move)) moves.Add(move);
+                        if (board.DoesMoveNotPutOwnKingInCheck(move)) moves.Add(move);
                     }
                 }
 
@@ -748,7 +748,7 @@ public class MoveGen : IBoardListener
                     if (!unsafeMove) moves.Add(move);
                     else
                     {
-                        if (board.IsMoveLegal(move)) moves.Add(move);
+                        if (board.DoesMoveNotPutOwnKingInCheck(move)) moves.Add(move);
                     }
                 }
 

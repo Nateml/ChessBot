@@ -78,8 +78,29 @@ public class MyBot : IChessBot
         //int retryMultiplier = 0;
         for (int distance = 1; distance < MaxDistance && !OutOfTime() && !exitSearch;)
         {
+            Stopwatch stopwatch = new();
+            stopwatch.Start();
+
             (Move newMove, int bestScore) = NegamaxAtRoot(board, distance, alpha, beta);
+
+            stopwatch.Stop();
+
+            if (!board.IsMoveLegal(newMove)) 
+            {
+                // I'm not sure why we sometimes get an illegal move, but maybe it has 
+                // something to do with the transposition table.
+                Console.WriteLine("Illegal move");
+                tTable.Clear();
+                distance = 1;
+                continue;
+            }
+
             priorityMove = newMove;
+
+            if (printToConsole)
+            {
+                Console.WriteLine("info depth " + distance + " nodes " + nodesReached + " score cp " + bestScore + " nps " + ((int) (nodesReached / (stopwatch.ElapsedMilliseconds / 1000.0))) + " pv " + priorityMove.ToString());
+            }
             // Check if eval was outside the aspiration window
             /*
             if (bestScore <= alpha)
@@ -120,8 +141,6 @@ public class MyBot : IChessBot
         nodesReached = 0;
         transpositions = 0;
 
-        Stopwatch stopwatch = new();
-        stopwatch.Start();
 
         Move[] moves = board.GetLegalMoves();
 
@@ -129,7 +148,6 @@ public class MyBot : IChessBot
         else if (moves.Length == 1) 
         {
             exitSearch = true;
-            if (printToConsole) Console.WriteLine("info depth " + depth + " nodes " + nodesReached + " score cp " + ((alpha+beta)/2) + " nps " + ((int) (nodesReached / (stopwatch.ElapsedMilliseconds / 1000.0))) + " pv " + moves[0].ToString());
             return (moves[0], (alpha+beta)/2);
         }
 
@@ -158,19 +176,6 @@ public class MyBot : IChessBot
             }
         }
 
-
-        stopwatch.Stop();
-
-        List<Move> pv = ExtractPV(board, bestMove);
-        if (printToConsole)
-        {
-            Console.Write("info depth " + depth + " nodes " + nodesReached + " score cp " + bestScore + " nps " + ((int) (nodesReached / (stopwatch.ElapsedMilliseconds / 1000.0))) + " pv ");
-            foreach (Move move in pv)
-            {
-                Console.Write(move.ToString() + " ");
-            }
-            Console.WriteLine();
-        }
 
         return (bestMove, bestScore);
     }
