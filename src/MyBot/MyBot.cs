@@ -13,7 +13,7 @@ public class MyBot : IChessBot
 
     private readonly int MaxDistance = 50;
 
-    private readonly int QuiscenceDepth = 4;
+    private readonly int QuiscenceDepth = 6;
 
     private int transpositions = 0;
 
@@ -275,7 +275,7 @@ public class MyBot : IChessBot
 
             int val;
 
-            if (i > 10 && depth >= 3 && !move.IsCapture())
+            if (i > 8 && depth >= 3 && !move.IsCapture())
             {
                 // We make the assumption that because our move ordering is good (hopefully), that moves further down in the list are likely bad,
                 //      so we search them at a reduced depth with a smaller aspiration window.
@@ -345,9 +345,6 @@ public class MyBot : IChessBot
 
         nodesReached++;
 
-        /*
-        int originalAlpha = alpha;
-
         // Transposition table lookup
         TranspositionData? tdata = tTable.Get(board);
 
@@ -356,24 +353,8 @@ public class MyBot : IChessBot
         {
             // We should always use a transposition (no matter its depth) in the quiscence search
             transpositions++;
-            switch (tdata.Flag)
-            {
-                case TranspositionData.ExactFlag:
-                    return tdata.Eval;
-                case TranspositionData.LowerboundFlag:
-                    alpha = Math.Max(alpha, tdata.Eval);
-                    break;
-                case TranspositionData.UpperboundFlag:
-                    beta = Math.Min(beta, tdata.Eval);
-                    break;
-            }
-
-            if (alpha > beta) 
-            {
-                return tdata.Eval;
-            }
+            if (tdata.Flag == TranspositionData.ExactFlag) return tdata.Eval;
         }
-        */
 
         if ( depth == 0 ) return Evaluation.EvaluateBoard(board) * colour;
 
@@ -408,26 +389,6 @@ public class MyBot : IChessBot
 
             alpha = Math.Max(alpha, val);
         }   
-
-        // Transposition table store
-        // Replace scheme: nodes searched
-        /*
-        int flag;
-        if (alpha <= originalAlpha)
-        {
-            flag = TranspositionData.UpperboundFlag;
-        }
-        else if (alpha >= beta)
-        {
-            flag = TranspositionData.LowerboundFlag;
-        }
-        else 
-        {
-            flag = TranspositionData.ExactFlag;
-        }
-
-        tTable.Put(board, 0, flag, alpha, null);
-        */
 
         return alpha;
     }
