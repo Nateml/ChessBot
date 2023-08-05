@@ -7,6 +7,7 @@ public static class Evaluation
 {
 
     public const double PositionalWeight = 0.25;
+    public const int KingInCheckPenalty = 100;
 
     /// <summary>
     /// Values for the different piece types.
@@ -382,7 +383,20 @@ public static class Evaluation
 
         int endGamePhase = 24 - gamePhase;
 
-        return (openingScore * gamePhase + endgameScore * endGamePhase) / 24;
+        int eval = (openingScore * gamePhase + endgameScore * endGamePhase) / 24;
+
+        // Penalty for being in check:
+
+        if (board.IsKingInCheck(true))
+        {
+            eval -= KingInCheckPenalty;
+        }
+        else if (board.IsKingInCheck(false))
+        {
+            eval += KingInCheckPenalty;
+        }
+
+        return eval;
     }
 
     public static int EvaluateMove(Move move, Board board, KillerMoves killerMoves, int distanceFromRoot)
