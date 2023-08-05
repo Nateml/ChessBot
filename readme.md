@@ -11,7 +11,7 @@ It's still a work in progress, but I've managed to make significant improvements
 - Negamax with alpha-beta pruning DFS.
     - Iterative deepening.
     - Fail-soft alpha-beta pruning.
-    - (Quiescence Search)[https://www.chessprogramming.org/Quiescence_Search] with [delta pruning](https://www.chessprogramming.org/Delta_Pruning) and a stand-pat score. Currently quiescence is limited to a depth of 4, but I might increase this (and look into pruning using static exchange evaluation) because I have a suspicion that there is some horizon effect at play.
+    - [Quiescence Search](https://www.chessprogramming.org/Quiescence_Search) with [delta pruning](https://www.chessprogramming.org/Delta_Pruning) and a stand-pat score. Currently quiescence is limited to a depth of 4, but I might increase this (and look into pruning using static exchange evaluation) because I have a suspicion that there is some horizon effect at play.
 - A transposition table.
     - I hate these...
 - Static evaluation function:
