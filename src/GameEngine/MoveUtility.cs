@@ -69,7 +69,7 @@ public static class MoveUtility
         }
         else if (board.GetPieceType(from) == BK)
         {
-            if (from == 64 && to == 6)
+            if (from == 4 && to == 6)
             {
                 flag = Move.KingCastleFlag;
             }
