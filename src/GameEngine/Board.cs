@@ -11,6 +11,10 @@ public sealed class Board
 
     private ulong[] bitboards = new ulong[13];
 
+    private HashSet<ulong> repetitionHistory = new();
+
+    private int numPlySincePawnMoveOrCapture = 0;
+
     private ulong epFile;
     private bool CWK, CWQ, CBQ, CBK;
 
@@ -100,8 +104,12 @@ public sealed class Board
     public void MakeMove(Move move)
     {
 
+        repetitionHistory.Add(zobristHash);
+
         // Push state data to stack before making the move
-        stateHistory.Push(new StateData(move, CWK, CWQ, CBK, CBQ, epFile, fullMoveCount, halfMoveCount, zobristHash));
+        stateHistory.Push(new StateData(move, CWK, CWQ, CBK, CBQ, epFile, fullMoveCount, halfMoveCount, zobristHash, numPlySincePawnMoveOrCapture));
+
+        numPlySincePawnMoveOrCapture++;
 
         int to = move.To;
         int from = move.From;
@@ -111,7 +119,6 @@ public sealed class Board
 
         PieceType movingPiece = move.MovingPiece;
         PieceType capturedPiece = move.CapturedPiece;
-
 
         bool white = MoveUtility.GetPieceColour(movingPiece) == 0;
 
@@ -252,6 +259,7 @@ public sealed class Board
 
         if (move.IsCapture())
         {
+            numPlySincePawnMoveOrCapture = 0;
             if (move.IsEnPassant())
             {
                 bitboards[(int)capturedPiece] ^= isWhiteToMove ? toBitboard << 8 : toBitboard >> 8;
@@ -296,9 +304,13 @@ public sealed class Board
                 }
             } 
         }
-        else if (move.IsDoublePawnPush())
+        else if (movingPiece == PieceType.WP || movingPiece == PieceType.BP)
         {
-            epFile = MoveGenData.FileMasks[to % 8];
+            numPlySincePawnMoveOrCapture = 0;
+            if (move.IsDoublePawnPush())
+            {
+                epFile = MoveGenData.FileMasks[to % 8];
+            }
         }
         else if (move.IsKingsideCastle())
         {
@@ -355,6 +367,8 @@ public sealed class Board
 
     public void UnmakeMove()
     {
+        repetitionHistory.Remove(zobristHash);
+
         StateData previousState = stateHistory.Pop();
         Move move = previousState.lastMove;
 
@@ -433,6 +447,7 @@ public sealed class Board
         halfMoveCount = previousState.halfMoveCount;
         fullMoveCount = previousState.fullMoveCount;
         zobristHash = previousState.zobristHash;
+        numPlySincePawnMoveOrCapture = previousState.numPlySincePawnMoveOrCapture;
 
         listeners.ForEach(listener => listener.OnBoardStateChange());
     }
@@ -470,6 +485,11 @@ public sealed class Board
     public bool CanBlackCastleQueenside() { return CBQ; }
 
     public ulong ZobristHash => zobristHash;
+
+    /// <summary>
+    /// A HashSet of all the positions, represented by zobrist keys, which have appeared in the board's history.
+    /// </summary>
+    public HashSet<ulong> RepetitionHistory => repetitionHistory;
 
     public int WhiteKingSquare
     {
@@ -812,9 +832,22 @@ public sealed class Board
         return BitboardUtility.IsBitSet(isWhiteToMove ? BlackAttackBitboard : WhiteAttackBitboard, square);
     }
 
+    public bool SquareIsDefended(int square)
+    {
+        return BitboardUtility.IsBitSet(isWhiteToMove ? WhiteAttackBitboard : BlackAttackBitboard, square);
+    }
+
+    /// <summary>
+    /// How many half moves have there been since a pawn move or capture?
+    /// Used to detect draws due to the 50-move rule.
+    /// </summary>
+    public int NumPlySincePawnMoveOrCapture => numPlySincePawnMoveOrCapture;
+
     public void AttachListener(IBoardListener listener)
     {
         listeners.Add(listener);
     }
+
+    public int NumPlyPlayed => stateHistory.Count;
 
 }

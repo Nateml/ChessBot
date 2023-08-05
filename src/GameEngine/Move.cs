@@ -177,9 +177,9 @@ public class Move
     /// <summary>
     /// Returns true if the given move has the same To and From values as this move.
     /// </summary>
-    public bool Equals(Move move)
+    public bool Equals(Move? move)
     {
-        return move.To == To && move.From == From;
+        return move != null && move.To == To && move.From == From;
     }
 
     public override string ToString()

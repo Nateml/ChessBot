@@ -6,6 +6,8 @@ using ChessBot;
 public static class Evaluation
 {
 
+    public const double PositionalWeight = 0.25;
+
     /// <summary>
     /// Values for the different piece types.
     /// Indexed first by opening/endgame, and then by PieceType.
@@ -212,129 +214,167 @@ public static class Evaluation
 
     /// <summary>
     /// Returns a static evaluation of the board.
-    /// Works with the negamax framework, since the returned evaluation is relative to the player who's turn it is to move.
-    /// i.e. a positive evaluation is always good for the player who's turn it is to move
     /// </summary>
     public static int EvaluateBoard(Board board)
     {
+        // We keep track of seperate opening/endgame score
+        // which are then tapered according to the game phase, 
+        // which is a continuous estimate, according to piece values (see gamePhaseInc),
+        // of what game phase we are in.
+        // These scores are calculated by the material weights of the player's pieces,
+        // as well as a piece-squares table (multiplied by a positional weight)
+        // to evaluation the position.
+
         int gamePhase = 0;
 
-        int openingScore = 0;
-        int endgameScore = 0;
+        int openingPositionalScore = 0;
+        int openingMaterialScore = 0;
+
+        int endgamePositionalScore = 0;
+        int endgameMaterialScore = 0;
 
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.WP), (pawnIndex) => {
-            openingScore += materialWeights[0][0];
-            openingScore += pieceSquareTable[0][0][pawnIndex];
+            openingMaterialScore += materialWeights[0][0];
+            openingPositionalScore += pieceSquareTable[0][0][pawnIndex];
 
-            endgameScore += materialWeights[1][0];
-            endgameScore += pieceSquareTable[1][0][pawnIndex];
+            endgameMaterialScore += materialWeights[1][0];
+            endgamePositionalScore += pieceSquareTable[1][0][pawnIndex];
+
         });
 
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.BP), (pawnIndex) => {
-            openingScore += materialWeights[0][6];
-            openingScore += -pieceSquareTable[0][0][mirror[pawnIndex]];
+            openingMaterialScore += materialWeights[0][6];
+            openingPositionalScore += -pieceSquareTable[0][0][mirror[pawnIndex]];
 
-            endgameScore += materialWeights[1][6];
-            endgameScore += -pieceSquareTable[1][0][mirror[pawnIndex]];
+            endgameMaterialScore += materialWeights[1][6];
+            endgamePositionalScore += -pieceSquareTable[1][0][mirror[pawnIndex]];
         });
 
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.WN), (knightIndex) => {
-            openingScore += materialWeights[0][1];
-            openingScore += pieceSquareTable[0][1][knightIndex];
+            openingMaterialScore += materialWeights[0][1];
+            openingPositionalScore += pieceSquareTable[0][1][knightIndex];
 
-            endgameScore += materialWeights[1][1];
-            endgameScore += pieceSquareTable[1][1][knightIndex];
+            endgameMaterialScore += materialWeights[1][1];
+            endgamePositionalScore += pieceSquareTable[1][1][knightIndex];
+
+            // Penalty for having a minor piece on an undefended square
+            if (!BitboardUtility.IsBitSet(board.WhiteAttackBitboard, knightIndex))
+            {
+                openingPositionalScore -= GetOpeningPieceValue(PieceType.WN);
+                endgamePositionalScore -= GetEndgamePieceValue(PieceType.WN);
+            }
 
             gamePhase += gamePhaseInc[1];
         });
 
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.BN), (knightIndex) => {
-            openingScore += materialWeights[0][7];
-            openingScore += -pieceSquareTable[0][1][mirror[knightIndex]];
+            openingMaterialScore += materialWeights[0][7];
+            openingPositionalScore += -pieceSquareTable[0][1][mirror[knightIndex]];
 
-            endgameScore += materialWeights[1][7];
-            endgameScore += -pieceSquareTable[1][1][mirror[knightIndex]];
+            endgameMaterialScore += materialWeights[1][7];
+            endgamePositionalScore += -pieceSquareTable[1][1][mirror[knightIndex]];
+
+            if (!BitboardUtility.IsBitSet(board.BlackAttackBitboard, knightIndex))
+            {
+                openingPositionalScore += GetOpeningPieceValue(PieceType.BN);
+                endgamePositionalScore += GetEndgamePieceValue(PieceType.BN);
+            }
 
             gamePhase += gamePhaseInc[1];
         });
 
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.WB), (bishopIndex) => {
-            openingScore += materialWeights[0][2];
-            openingScore += pieceSquareTable[0][2][bishopIndex];
+            openingMaterialScore += materialWeights[0][2];
+            openingPositionalScore += pieceSquareTable[0][2][bishopIndex];
 
-            endgameScore += materialWeights[1][2];
-            endgameScore += pieceSquareTable[1][2][bishopIndex];
+            endgameMaterialScore += materialWeights[1][2];
+            endgamePositionalScore += pieceSquareTable[1][2][bishopIndex];
+
+            if (!BitboardUtility.IsBitSet(board.WhiteAttackBitboard, bishopIndex))
+            {
+                openingPositionalScore -= GetOpeningPieceValue(PieceType.WB);
+                endgamePositionalScore -= GetEndgamePieceValue(PieceType.WB);
+            }
 
             gamePhase += gamePhaseInc[2];
         });
 
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.BB), (bishopIndex) => {
-            openingScore += materialWeights[0][8];
-            openingScore += -pieceSquareTable[0][2][mirror[bishopIndex]];
+            openingMaterialScore += materialWeights[0][8];
+            openingPositionalScore += -pieceSquareTable[0][2][mirror[bishopIndex]];
 
-            endgameScore += materialWeights[1][8];
-            endgameScore += -pieceSquareTable[1][2][mirror[bishopIndex]];
+            endgameMaterialScore += materialWeights[1][8];
+            endgamePositionalScore += -pieceSquareTable[1][2][mirror[bishopIndex]];
+
+            if (!BitboardUtility.IsBitSet(board.BlackAttackBitboard, bishopIndex))
+            {
+                openingPositionalScore += GetOpeningPieceValue(PieceType.BB);
+                endgamePositionalScore += GetEndgamePieceValue(PieceType.BB);
+            }
 
             gamePhase += gamePhaseInc[2];
         });
 
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.WR), (rookIndex) => {
-            openingScore += materialWeights[0][3];
-            openingScore += pieceSquareTable[0][3][rookIndex];
+            openingMaterialScore += materialWeights[0][3];
+            openingPositionalScore += pieceSquareTable[0][3][rookIndex];
 
-            endgameScore += materialWeights[1][3];
-            endgameScore += pieceSquareTable[1][3][rookIndex];
+            endgameMaterialScore += materialWeights[1][3];
+            endgamePositionalScore += pieceSquareTable[1][3][rookIndex];
 
             gamePhase += gamePhaseInc[3];
         });
 
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.BR), (rookIndex) => {
-            openingScore += materialWeights[0][9];
-            openingScore += -pieceSquareTable[0][3][mirror[rookIndex]];
+            openingMaterialScore += materialWeights[0][9];
+            openingPositionalScore += -pieceSquareTable[0][3][mirror[rookIndex]];
 
-            endgameScore += materialWeights[1][9];
-            endgameScore += -pieceSquareTable[1][3][mirror[rookIndex]];
+            endgameMaterialScore += materialWeights[1][9];
+            endgamePositionalScore += -pieceSquareTable[1][3][mirror[rookIndex]];
 
             gamePhase += gamePhaseInc[3];
         });
 
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.WQ), (queenIndex) => {
-            openingScore += materialWeights[0][4];
-            openingScore += pieceSquareTable[0][4][queenIndex];
+            openingMaterialScore += materialWeights[0][4];
+            openingPositionalScore += pieceSquareTable[0][4][queenIndex];
 
-            endgameScore += materialWeights[1][4];
-            endgameScore += pieceSquareTable[1][4][queenIndex];
+            endgameMaterialScore += materialWeights[1][4];
+            endgamePositionalScore += pieceSquareTable[1][4][queenIndex];
 
             gamePhase += gamePhaseInc[4];
         });
 
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.BQ), (queenIndex) => {
-            openingScore += materialWeights[0][10];
-            openingScore += -pieceSquareTable[0][4][mirror[queenIndex]];
+            openingMaterialScore += materialWeights[0][10];
+            openingPositionalScore += -pieceSquareTable[0][4][mirror[queenIndex]];
 
-            endgameScore += materialWeights[1][10];
-            endgameScore += -pieceSquareTable[1][4][mirror[queenIndex]];
+            endgameMaterialScore += materialWeights[1][10];
+            endgamePositionalScore += -pieceSquareTable[1][4][mirror[queenIndex]];
 
             gamePhase += gamePhaseInc[4];
         });
 
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.WK), (kingIndex) => {
-            openingScore += materialWeights[0][5];
-            openingScore += pieceSquareTable[0][5][kingIndex];
+            openingMaterialScore += materialWeights[0][5];
+            openingPositionalScore += pieceSquareTable[0][5][kingIndex];
 
-            endgameScore += materialWeights[1][5];
-            endgameScore += pieceSquareTable[1][5][kingIndex];
+            endgameMaterialScore += materialWeights[1][5];
+            endgamePositionalScore += pieceSquareTable[1][5][kingIndex];
         });
 
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.BK), (kingIndex) => {
-            openingScore += materialWeights[0][11];
-            openingScore += -pieceSquareTable[0][5][mirror[kingIndex]];
+            openingMaterialScore += materialWeights[0][11];
+            openingPositionalScore += -pieceSquareTable[0][5][mirror[kingIndex]];
 
-            endgameScore += materialWeights[1][11];
-            endgameScore += -pieceSquareTable[1][5][mirror[kingIndex]];
+            endgameMaterialScore += materialWeights[1][11];
+            endgamePositionalScore += -pieceSquareTable[1][5][mirror[kingIndex]];
         });
 
         // Tapered evaluation:
+
+        int openingScore = (int)(openingMaterialScore + PositionalWeight * openingPositionalScore);
+        int endgameScore = (int)(endgameMaterialScore + PositionalWeight * endgamePositionalScore);
 
         if (gamePhase > 24) gamePhase = 24; // In case of early promotion
 
@@ -342,18 +382,23 @@ public static class Evaluation
 
         int endGamePhase = 24 - gamePhase;
 
-        return (openingScore * gamePhase + endgameScore * endGamePhase) / 24 * (board.IsWhiteToMove ? 1 : -1);
+        return (openingScore * gamePhase + endgameScore * endGamePhase) / 24;
     }
 
-    public static int EvaluateMove(Move move, Board board)
+    public static int EvaluateMove(Move move, Board board, KillerMoves killerMoves, int distanceFromRoot)
     {
         int score = 0;
 
+        const int KillerValue = 1000;
+
         if (move.IsCapture())
         {
-            score = 10*GetPieceValue(move.CapturedPiece) - GetPieceValue(move.MovingPiece);
+            score = 100*GetOpeningPieceValue(move.CapturedPiece) - GetOpeningPieceValue(move.MovingPiece);
         }
-
+        else if (killerMoves.Contains(move, distanceFromRoot))
+        {
+            score = KillerValue;
+        }
 
         if (move.IsPromotion())
         {
@@ -361,19 +406,19 @@ public static class Evaluation
             {
                     case Move.KnightPromoCaptureFlag:
                     case Move.KnightPromotionFlag:
-                        score += GetPieceValue(PieceType.WN);
+                        score += GetOpeningPieceValue(PieceType.WN);
                         break;
                     case Move.BishopPromoCaptureFlag:
                     case Move.BishopPromotionFlag:
-                        score += GetPieceValue(PieceType.WB);
+                        score += GetOpeningPieceValue(PieceType.WB);
                         break;
                     case Move.RookPromoCaptureFlag:
                     case Move.RookPromotionFlag:
-                        score += GetPieceValue(PieceType.WR);
+                        score += GetOpeningPieceValue(PieceType.WR);
                         break;
                     case Move.QueenPromoCaptureFlag:
                     case Move.QueenPromotionFlag:
-                        score += GetPieceValue(PieceType.WQ);
+                        score += GetOpeningPieceValue(PieceType.WQ);
                         break;
             }
         }
@@ -381,6 +426,11 @@ public static class Evaluation
         if (cachedGamePhase > 12)
         {
             score += GetOpeningPieceSquareScore(move.MovingPiece, move.To);
+        }
+
+        if (board.SquareIsUnderAttackByEnemyPawn(move.To))
+        {
+            score -= GetOpeningPieceValue(move.MovingPiece);
         }
 
         return score;
@@ -406,7 +456,7 @@ public static class Evaluation
         };
     }
 
-    public static int GetPieceValue(PieceType piece)
+    public static int GetOpeningPieceValue(PieceType piece)
     {
         return piece switch
         {
@@ -415,6 +465,19 @@ public static class Evaluation
             PieceType.WB or PieceType.BB => materialWeights[0][2],
             PieceType.WR or PieceType.BR => materialWeights[0][3],
             PieceType.WQ or PieceType.BQ => materialWeights[0][4],
+            _ => -1,
+        };
+    }
+
+    public static int GetEndgamePieceValue(PieceType piece)
+    {
+        return piece switch
+        {
+            PieceType.WP or PieceType.BP => materialWeights[1][0],
+            PieceType.WN or PieceType.BN => materialWeights[1][1],
+            PieceType.WB or PieceType.BB => materialWeights[1][2],
+            PieceType.WR or PieceType.BR => materialWeights[1][3],
+            PieceType.WQ or PieceType.BQ => materialWeights[1][4],
             _ => -1,
         };
     }

@@ -8,11 +8,27 @@ class UCI
     private static Board board = new();
     private static IChessBot bot = new MyBot();
 
+    private static bool hasStopBeenRequested = false;
+
     public static void Main(string[] args)
     {
         board.AttachListener(board.moveGen);
         Console.WriteLine("Welcome to Nate's ChessBot.");
         Console.WriteLine("This program uses the UCI protocol.");
+
+        /*
+        new Thread(delegate () {
+            while (true)
+            {
+                Thread.Sleep(1000);
+                if (!Console.IsInputRedirected) continue;
+                string? input = Console.ReadLine();
+                if (input == null) continue;
+                hasStopBeenRequested = input.Contains("stop");
+            }
+        }).Start();
+        */
+
         UCICommunication();
     }
 
@@ -35,6 +51,7 @@ class UCI
             if (input == "zobrist") InputZobrist();
             if (input == "test perft") InputTestPerft();
             if (input == "transposition table stats") InputTranspositionTableStats();
+            if (input == "rapid engine test") InputRapidEngineTest();
             if (input == "quit") InputQuit();
         }
     }
@@ -43,7 +60,12 @@ class UCI
     {
         Console.WriteLine("id name " + EngineName);
         Console.WriteLine("id author Nathan Macdonald");
-        Console.WriteLine("uci ok");
+        Console.WriteLine("uciok");
+    }
+
+    static void InputRapidEngineTest()
+    {
+        PositionTest.Test(bot);
     }
 
     static void InputZobrist()
@@ -84,12 +106,13 @@ class UCI
     {
         if (board != null && bot != null)
         {
-            Console.WriteLine("ready ok");
+            Console.WriteLine("readyok");
         }
     }
 
     static void InputUCINewGame()
     {
+        bot.ResetGame();
     }
 
     static void InputPosition(string input)
@@ -130,6 +153,8 @@ class UCI
 
     static void InputGo(string input)
     {
+        hasStopBeenRequested = false;
+
         if (input.StartsWith("go perft"))
         {
             if (input.Contains("capturesonly"))
@@ -154,7 +179,25 @@ class UCI
         }
         else
         {
-            Move bestMove = bot.GetBestMove(board, 5000);
+            int timeLeft = 600000; // Assume 10 minute game
+            if (board.IsWhiteToMove)
+            {
+                if (input.Contains("wtime"))
+                {
+                    timeLeft = int.Parse(input[(input.IndexOf("winc") + 5)..].Split(" ")[0]);
+                }
+            }
+            else
+            {
+                if (input.Contains("btime"))
+                {
+                    string[] words = input[(input.IndexOf("btime") + 5)..].Split(" ");
+                    Console.WriteLine(words[0]);
+                    Console.WriteLine(words[1]);
+                    timeLeft = int.Parse(words[1].Trim());
+                }
+            }
+            Move bestMove = bot.GetBestMove(board, timeLeft, false, true);
             Console.WriteLine("bestmove " + bestMove.ToString());
         }
     }
@@ -179,4 +222,26 @@ class UCI
     {
         Environment.Exit(0);
     }
+
+    public static bool IsStopRequested()
+    {
+        return hasStopBeenRequested;
+        /*
+        if (hasStopBeenRequested) return true;
+        if (!Console.IsInputRedirected) return false;
+        string? input = Console.ReadLine();
+        if (input == null) return false;
+        Console.WriteLine("input: " + input);
+        if (input.Contains("stop")) 
+        {
+            hasStopBeenRequested = true;
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+        */
+    }
+
 }
