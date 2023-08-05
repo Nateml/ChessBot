@@ -182,8 +182,48 @@ public class Move
         return move != null && move.To == To && move.From == From;
     }
 
+    /// <summary>
+    /// Returns the type of piece this move is promoting to.
+    /// If this move is not a promoting move, returns null.
+    /// NOTE: Always returns a white piece type for simplicity. 
+    /// </summary>
+    /// <returns></returns>
+    public PieceType? GetPromotionType()
+    {
+        return Flag switch
+        {
+            KnightPromotionFlag or KnightPromoCaptureFlag => (PieceType?)PieceType.WN,
+            BishopPromotionFlag or BishopPromoCaptureFlag => (PieceType?)PieceType.WB,
+            RookPromotionFlag or RookPromoCaptureFlag => (PieceType?)PieceType.WR,
+            QueenPromotionFlag or QueenPromoCaptureFlag => (PieceType?)PieceType.WQ,
+            _ => null,
+        };
+    }
+
     public override string ToString()
     {
-        return ((Square)From).ToString().ToLower() + ((Square)To).ToString().ToLower();
+        string output = ((Square)From).ToString().ToLower() + ((Square)To).ToString().ToLower();
+
+        PieceType? promotedPiece = GetPromotionType();
+        if (promotedPiece != null)
+        {
+            switch (promotedPiece)
+            {
+                case PieceType.WN:
+                    output += "n";
+                    break;
+                case PieceType.WB:
+                    output += "b";
+                    break;
+                case PieceType.WR:
+                    output += "r";
+                    break;
+                case PieceType.WQ:
+                    output += "q";
+                    break;
+            }
+        }
+
+        return output;
     }
 }
