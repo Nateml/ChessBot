@@ -56,8 +56,28 @@ public static class MoveUtility
             }
         }
 
-        if ((from == 60 && to == 62) | (from == 4 && to == 6)) flag = Move.KingCastleFlag;
-        if ((from == 60 && to == 58) | (from == 4 && to == 2)) flag = Move.QueenCastleFlag;
+        if (board.GetPieceType(from) == WK)
+        {
+            if (from == 60 && to == 62)
+            {
+                flag = Move.KingCastleFlag;
+            }
+            else if (from == 60 && to == 58)
+            {
+                flag = Move.QueenCastleFlag;
+            }
+        }
+        else if (board.GetPieceType(from) == BK)
+        {
+            if (from == 64 && to == 6)
+            {
+                flag = Move.KingCastleFlag;
+            }
+            else if (from == 4 && to == 2)
+            {
+                flag = Move.QueenCastleFlag;
+            }
+        }
 
         if (algebraicMove.Length == 5)
         {
