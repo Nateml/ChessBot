@@ -56,6 +56,7 @@ public static class MoveUtility
             }
         }
 
+        // Check for castling move
         if (board.GetPieceType(from) == WK)
         {
             if (from == 60 && to == 62)
@@ -76,6 +77,23 @@ public static class MoveUtility
             else if (from == 4 && to == 2)
             {
                 flag = Move.QueenCastleFlag;
+            }
+        }
+        // Check for en passant
+        else if (movingPiece == WP)
+        {
+            // Is a white pawn landing on the EP file? And is this pawn moving from rank 5?
+            if (((1ul << to) & board.EpFile) != 0 && ((1ul << from) & MoveGenData.RankMasks[4]) != 0)
+            {
+                flag = Move.EpCaptureFlag;
+            }
+        }
+        else if (movingPiece == BP)
+        {
+            // Is a black pawn landing on the EP file? And is this pawn moving from rank 4?
+            if (((1ul << to) & board.EpFile) != 0 && ((1ul << from) & MoveGenData.RankMasks[3]) != 0)
+            {
+                flag = Move.EpCaptureFlag;
             }
         }
 
