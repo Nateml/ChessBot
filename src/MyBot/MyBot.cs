@@ -360,12 +360,12 @@ public class MyBot : IChessBot
 
         int standPat = Evaluation.EvaluateBoard(board) * colour;
         
-        if ( standPat >= beta ) return beta;
+        if ( standPat >= beta ) return standPat;
 
         // Delta pruning
         int BigDelta = 900;
 
-        if ( standPat < alpha - BigDelta ) return alpha;
+        if ( standPat < alpha - BigDelta ) return standPat;
 
         alpha = Math.Max(alpha, standPat);
 
@@ -385,12 +385,14 @@ public class MyBot : IChessBot
             int val = -Quiscence(board, depth-1, distanceFromRoot+1, -beta, -alpha, -colour);
             board.UnmakeMove();
 
-            if (val >= beta) return beta;
+            if (val >= beta) return val;
 
-            alpha = Math.Max(alpha, val);
+            standPat = Math.Max(val, standPat);
+
+            alpha = Math.Max(alpha, standPat);
         }   
 
-        return alpha;
+        return standPat;
     }
 
     private void PickMove(Move[] moves, int startingIndex, Board board, int distanceFromRoot, Move? bestMove = null)
