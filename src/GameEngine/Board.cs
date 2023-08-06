@@ -104,7 +104,7 @@ public sealed class Board
     public void MakeMove(Move move)
     {
 
-        repetitionHistory.Add(zobristHash);
+        //repetitionHistory.Add(zobristHash);
 
         // Push state data to stack before making the move
         stateHistory.Push(new StateData(move, CWK, CWQ, CBK, CBQ, epFile, fullMoveCount, halfMoveCount, zobristHash, numPlySincePawnMoveOrCapture));

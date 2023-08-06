@@ -82,17 +82,21 @@ public static class MoveUtility
         // Check for en passant
         else if (movingPiece == WP)
         {
+            Console.WriteLine((1ul << to) & board.EpFile);
             // Is a white pawn landing on the EP file? And is this pawn moving from rank 5?
             if (((1ul << to) & board.EpFile) != 0 && ((1ul << from) & MoveGenData.RankMasks[4]) != 0)
             {
+                Console.WriteLine("is ep");
                 flag = Move.EpCaptureFlag;
             }
         }
         else if (movingPiece == BP)
         {
+            Console.WriteLine((1ul << to) & board.EpFile);
             // Is a black pawn landing on the EP file? And is this pawn moving from rank 4?
             if (((1ul << to) & board.EpFile) != 0 && ((1ul << from) & MoveGenData.RankMasks[3]) != 0)
             {
+                Console.WriteLine("is ep");
                 flag = Move.EpCaptureFlag;
             }
         }

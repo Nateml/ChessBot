@@ -1,0 +1,11 @@
+Fix a bug:
+
+Steps to reproduce:
+Run the .exe, enter: position fen 2R5/1p2qkpp/p2p4/P1pP4/1P3r2/8/1BQ1BbPP/7K w - c6 32 64 moves d5c6
+
+Stack trace:
+Unhandled exception. System.IndexOutOfRangeException: Index was outside the bounds of the array.
+   at ChessBot.Board.MakeMove(Move move) in C:\Users\natem\Projects\ChessBot\src\GameEngine\Board.cs:line 110
+   at ChessBot.UCI.InputPosition(String input) in C:\Users\natem\Projects\ChessBot\src\UCI.cs:line 154
+   at ChessBot.UCI.UCICommunication() in C:\Users\natem\Projects\ChessBot\src\UCI.cs:line 46
+   at ChessBot.UCI.Main(String[] args) in C:\Users\natem\Projects\ChessBot\src\UCI.cs:line 32
