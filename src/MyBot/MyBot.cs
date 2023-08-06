@@ -280,7 +280,7 @@ public class MyBot : IChessBot
 
             int val;
 
-            if (i > 6 && depth >= 3 && !move.IsCapture())
+            if (i > 8 && depth >= 3 && !move.IsCapture())
             {
                 // We make the assumption that because our move ordering is good (hopefully), that moves further down in the list are likely bad,
                 //      so we search them at a reduced depth with a smaller aspiration window.
