@@ -2,12 +2,13 @@ on:
   push:
     branches:
       - master
+      - main
 
 name: Copy Ubuntu Release To Lichess-Bot Repo
 
 jobs:
   copy-file:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -21,6 +22,7 @@ jobs:
           source_file: "bin/Release/net7.0/ubuntu.16.04-x64/publish/"
           destination_repo: "Nateml/lichess-bot"
           destination_folder: "engines/ChessBot/"
+          destination_branch: "master"
           user_email: "nateml.mac@gmail.com"
           user_name: "Nateml"
           commit_message: "AUTO: Copying ubuntu build from Nateml/ChessBot"
