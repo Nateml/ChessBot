@@ -9,10 +9,10 @@ public static class Evaluation
     public const double PositionalWeight = 0.35;
     public const int KingInCheckPenalty = 200;
     public const int PawnStructureWeight = 5;
-    public const int BishopPairBonus = 70;
+    public const int BishopPairBonus = 80;
     public const double UndefendedMinorPieceWeight = 0.5;
     public const int PassedPawnBonus = 15;
-    public const int kingVirtualMobilityWeight = 3;
+    public const int kingVirtualMobilityWeight = 5;
 
     /// <summary>
     /// Values for the different piece types.
@@ -251,8 +251,10 @@ public static class Evaluation
             endgamePositionalScore += pieceSquareTable[1][0][pawnIndex];
 
             // Pawn structure:
+            /*
             ulong pawnBuddies = MoveGenData.whitePawnAttacks[pawnIndex] | MoveGenData.blackPawnAttacks[pawnIndex];
             pawnStructureScore += PawnStructureWeight * BitboardUtility.CountSetBits(pawnBuddies & board.GetBitboardByPieceType(PieceType.WP));
+            */
 
         });
 
@@ -263,8 +265,10 @@ public static class Evaluation
             endgameMaterialScore += materialWeights[1][6];
             endgamePositionalScore += -pieceSquareTable[1][0][mirror[pawnIndex]];
 
+            /*
             ulong pawnBuddies = MoveGenData.whitePawnAttacks[pawnIndex] | MoveGenData.blackPawnAttacks[pawnIndex];
             pawnStructureScore -= PawnStructureWeight * BitboardUtility.CountSetBits(pawnBuddies & board.GetBitboardByPieceType(PieceType.BP));
+            */
         });
 
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.WN), (knightIndex) => {
