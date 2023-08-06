@@ -52,6 +52,7 @@ class UCI
             if (input == "test perft") InputTestPerft();
             if (input == "transposition table stats") InputTranspositionTableStats();
             if (input == "rapid engine test") InputRapidEngineTest();
+            if (input == "zobrist test") InputZobristTest();
             if (input == "quit") InputQuit();
         }
     }
@@ -61,6 +62,11 @@ class UCI
         Console.WriteLine("id name " + EngineName);
         Console.WriteLine("id author Nathan Macdonald");
         Console.WriteLine("uciok");
+    }
+
+    static void InputZobristTest()
+    {
+        ZobristTest.Test();
     }
 
     static void InputRapidEngineTest()

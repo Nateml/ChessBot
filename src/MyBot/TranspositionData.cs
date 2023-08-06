@@ -5,11 +5,11 @@ using ChessBot;
 
 public class TranspositionData
 {
-    public const int ExactFlag = 0;
-    public const int LowerboundFlag = 1;
-    public const int UpperboundFlag = 2;
+    public const byte ExactFlag = 0;
+    public const byte LowerboundFlag = 1;
+    public const byte UpperboundFlag = 2;
 
-    public TranspositionData(ulong zobristHash, int depth, int flag, int eval, Move? bestMove)
+    public TranspositionData(ulong zobristHash, byte depth, byte flag, int eval, Move? bestMove)
     {
         ZobristHash = zobristHash;
         Depth = depth;
@@ -20,9 +20,9 @@ public class TranspositionData
 
     public ulong ZobristHash { get; private set; }
 
-    public int Depth { get; private set; }
+    public byte Depth { get; private set; }
 
-    public int Flag { get; private set; }
+    public byte Flag { get; private set; }
 
     public int Eval { get; private set; }
 

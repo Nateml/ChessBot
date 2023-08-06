@@ -7,7 +7,7 @@ public static class Evaluation
 {
 
     public const double PositionalWeight = 0.25;
-    public const int KingInCheckPenalty = 100;
+    public const int KingInCheckPenalty = 200;
 
     /// <summary>
     /// Values for the different piece types.

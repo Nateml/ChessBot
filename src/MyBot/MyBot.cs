@@ -11,7 +11,7 @@ public class MyBot : IChessBot
 
     private int nodesReached = 0;
 
-    private readonly int MaxDistance = 50;
+    private readonly byte MaxDistance = 50;
 
     private readonly int QuiscenceDepth = 6;
 
@@ -75,8 +75,8 @@ public class MyBot : IChessBot
         priorityMove = board.GetLegalMoves()[0];
         int alpha = -100000;
         int beta = 100000;
-        //int retryMultiplier = 0;
-        for (int distance = 1; distance < MaxDistance && !OutOfTime() && !exitSearch;)
+        int retryMultiplier = 0;
+        for (byte distance = 1; distance < MaxDistance && !OutOfTime() && !exitSearch;)
         {
             Stopwatch stopwatch = new();
             stopwatch.Start();
@@ -95,14 +95,7 @@ public class MyBot : IChessBot
                 continue;
             }
 
-            priorityMove = newMove;
-
-            if (printToConsole)
-            {
-                Console.WriteLine("info depth " + distance + " nodes " + nodesReached + " score cp " + bestScore + " nps " + ((int) (nodesReached / (stopwatch.ElapsedMilliseconds / 1000.0))) + " pv " + priorityMove.ToString());
-            }
             // Check if eval was outside the aspiration window
-            /*
             if (bestScore <= alpha)
             {
                 retryMultiplier += 1;
@@ -121,12 +114,22 @@ public class MyBot : IChessBot
             // Only updating the "priority move" here, because I don't want to update it with a move that had a score outside of the aspiration window
             priorityMove = newMove;
 
+            if (printToConsole)
+            {
+                Console.Write("info depth " + distance + " nodes " + nodesReached + " score cp " + bestScore + " nps " + ((int) (nodesReached / (stopwatch.ElapsedMilliseconds / 1000.0))) + " pv " );
+                List<Move> pv = ExtractPV(board, priorityMove);
+                foreach (Move pvMove in pv)
+                {
+                   Console.Write(pvMove.ToString() + " ");
+                }
+                Console.WriteLine();
+            }
+
             //retryMultiplier = 0;
 
             // Adjust the aspiration window
             alpha = bestScore - 30;
             beta = bestScore + 30;
-            */
 
             distance++;
         }
@@ -136,7 +139,7 @@ public class MyBot : IChessBot
         return priorityMove;
     }
 
-    private (Move, int) NegamaxAtRoot(Board board, int depth, int alpha, int beta)
+    private (Move, int) NegamaxAtRoot(Board board, byte depth, int alpha, int beta)
     {
         nodesReached = 0;
         transpositions = 0;
@@ -161,7 +164,7 @@ public class MyBot : IChessBot
             Move move = moves[i];
 
             board.MakeMove(move);
-            int score = -Negamax(board, depth-1, 1, -beta, -alpha, board.IsWhiteToMove ? 1 : -1);
+            int score = -Negamax(board, (byte)(depth-1), 1, -beta, -alpha, board.IsWhiteToMove ? 1 : -1);
             board.UnmakeMove();
 
             if (score > bestScore)
@@ -180,12 +183,13 @@ public class MyBot : IChessBot
         return (bestMove, bestScore);
     }
 
-    private int Negamax(Board board, int depth, int distanceFromRoot, int alpha, int beta, int colour)
+    private int Negamax(Board board, byte depth, int distanceFromRoot, int alpha, int beta, int colour)
     {
         //if (UCI.IsStopRequested()) return 0;
 
         nodesReached++;
 
+        /*
         if (board.RepetitionHistory.Contains(board.ZobristHash))
         {
             // Detect draw by three-fold repetion.
@@ -208,6 +212,7 @@ public class MyBot : IChessBot
             // Check 50 move rule
             return 0;
         }
+        */
 
         // Store the initial alpha to check node type later on
         int originalAlpha = alpha;
@@ -275,24 +280,22 @@ public class MyBot : IChessBot
 
             int val;
 
-            if (i > 8 && depth >= 3 && !move.IsCapture())
+            if (i > 6 && depth >= 3 && !move.IsCapture())
             {
                 // We make the assumption that because our move ordering is good (hopefully), that moves further down in the list are likely bad,
                 //      so we search them at a reduced depth with a smaller aspiration window.
                 const int reduceDepth = 1;
-                val = -Negamax(board, depth-1-reduceDepth, distanceFromRoot+1, -beta, -alpha, -colour);
+                val = -Negamax(board, (byte)(depth-1-reduceDepth), distanceFromRoot+1, -alpha-1, -alpha, -colour);
 
                 // If we get an evaluation better than we expected, we have to research the node with the full depth
-                /*
                 if (val > alpha)
                 {
-                    val = -Negamax(board, depth-1, distanceFromRoot+1, -beta, -alpha, -colour);
+                    val = -Negamax(board, (byte)(depth-1), distanceFromRoot+1, -beta, -alpha, -colour);
                 }
-                */
             }
             else
             {
-                val = -Negamax(board, depth-1, distanceFromRoot+1, -beta, -alpha, -colour);
+                val = -Negamax(board, (byte)(depth-1), distanceFromRoot+1, -beta, -alpha, -colour);
             }
             //val = -Negamax(board, depth-1, distanceFromRoot+1, -beta, -alpha, -colour);
 
@@ -323,7 +326,7 @@ public class MyBot : IChessBot
         }
 
         // Transposition table store
-        int flag;
+        byte flag;
         if (bestScore <= originalAlpha)
         {
             flag = TranspositionData.UpperboundFlag;
@@ -376,7 +379,7 @@ public class MyBot : IChessBot
             Move move = moves[i];
 
             // Skip this move if the value of the captured piece is not enough to raise alpha (within a 100 safety margin) 
-            if (standPat < alpha - Evaluation.GetOpeningPieceValue(move.CapturedPiece))
+            if (standPat < alpha - Evaluation.GetOpeningPieceValue(move.CapturedPiece) - 100)
             {
                 continue;
             }
@@ -441,7 +444,6 @@ public class MyBot : IChessBot
             firstPVMove
         };
 
-        /*
         board.MakeMove(firstPVMove);
         TranspositionData? nextPositionFromTTable = tTable.Get(board);
         while (nextPositionFromTTable != null && nextPositionFromTTable.Depth != 0)
@@ -455,7 +457,6 @@ public class MyBot : IChessBot
         {
             board.UnmakeMove();
         }
-        */
 
         return pv;
     }

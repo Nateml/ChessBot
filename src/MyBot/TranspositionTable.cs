@@ -18,7 +18,7 @@ public class TranspositionTable
         table = new TranspositionData[size];
     }
 
-    public void Put(Board board, int depth, int flag, int eval, Move? bestMove)
+    public void Put(Board board, byte depth, byte flag, int eval, Move? bestMove)
     {
         int index = (int) (board.ZobristHash % (ulong)size);
         if (table[index] == null)
