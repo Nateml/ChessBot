@@ -10,6 +10,8 @@ static class BitboardUtility
         0x1010101010101010L, 0x2020202020202020L, 0x4040404040404040L, 0x8080808080808080L
     };
 
+    public readonly static ulong[] SquareFileTable = new ulong[64];
+
     public static void PrintBitboard(ulong bitboard)
     {
         string[][] board = new string[8][];

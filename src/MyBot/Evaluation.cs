@@ -6,10 +6,10 @@ using ChessBot;
 public static class Evaluation
 {
 
-    public const double PositionalWeight = 0.25;
+    public const double PositionalWeight = 0.35;
     public const int KingInCheckPenalty = 200;
     public const int PawnStructureWeight = 5;
-    public const int BishopPairBonus = 50;
+    public const int BishopPairBonus = 70;
     public const double UndefendedMinorPieceWeight = 0.5;
     public const int PassedPawnBonus = 15;
     public const int kingVirtualMobilityWeight = 3;
@@ -397,6 +397,7 @@ public static class Evaluation
         });
 
         // Passed pawn bonus:
+        /*
         foreach (ulong fileMask in MoveGenData.FileMasks)
         {
             int numWhitePawns = BitboardUtility.CountSetBits(fileMask & board.GetBitboardByPieceType(PieceType.WP));
@@ -405,6 +406,7 @@ public static class Evaluation
             if ((numWhitePawns == 0) && (numBlackPawns > 0)) passedPawns--;
             else if ((numBlackPawns == 0) && (numWhitePawns > 0)) passedPawns++;
         }
+        */
 
         // Tapered evaluation:
 
@@ -437,22 +439,22 @@ public static class Evaluation
         if (blackBishopCount >= 2) eval -= BishopPairBonus;
 
         // KING SAFETY:
+        // Having an file with no pawns adjecent to the king is bad
+
         // The "virtual mobility" of the king
         ulong allPieces = board.AllPiecesBitboard;
         int whiteKingSquare = board.WhiteKingSquare;
         int blackKingSquare = board.BlackKingSquare;
 
-        /*
         int whiteKingVirtualMobility = kingVirtualMobilityWeight * BitboardUtility.CountSetBits(Magic.GetRookTargets(whiteKingSquare, allPieces) | Magic.GetBishopTargets(whiteKingSquare, allPieces));
         int blackKingVirtualMobility = kingVirtualMobilityWeight * BitboardUtility.CountSetBits(Magic.GetRookTargets(blackKingSquare, allPieces) | Magic.GetBishopTargets(blackKingSquare, allPieces));
 
         eval -= (int)(gamePhase/24.0 * whiteKingVirtualMobility);
         eval += (int)(gamePhase/24.0 * blackKingVirtualMobility);
-        */
 
-        eval += pawnStructureScore;
+        //eval += pawnStructureScore;
 
-        eval += PassedPawnBonus * passedPawns;
+        //eval += PassedPawnBonus * passedPawns;
 
         return eval;
     }
