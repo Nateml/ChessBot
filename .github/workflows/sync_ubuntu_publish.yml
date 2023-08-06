@@ -15,7 +15,7 @@ jobs:
 
       # Copy the publish folder
       - name: Push ubuntu release
-        uses: dmnemec/copy_file_to_another_repo_action@master
+        uses: dmnemec/copy_file_to_another_repo_action@main
         env:
           API_TOKEN_GITHUB: ${{ secrets.API_TOKEN_GITHUB }}
         with:
