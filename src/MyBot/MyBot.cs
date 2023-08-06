@@ -117,7 +117,7 @@ public class MyBot : IChessBot
             if (printToConsole)
             {
                 Console.Write("info depth " + distance + " nodes " + nodesReached + " score cp " + bestScore + " nps " + ((int) (nodesReached / (stopwatch.ElapsedMilliseconds / 1000.0))) + " pv " );
-                List<Move> pv = ExtractPV(board, priorityMove);
+                List<Move> pv = ExtractPV(board, priorityMove, distance);
                 foreach (Move pvMove in pv)
                 {
                    Console.Write(pvMove.ToString() + " ");
@@ -437,7 +437,7 @@ public class MyBot : IChessBot
         return clock.ElapsedMilliseconds > timeLimit;
     }
 
-    private List<Move> ExtractPV(Board board, Move firstPVMove)
+    private List<Move> ExtractPV(Board board, Move firstPVMove, int depth)
     {
         List<Move> pv = new()
         {
@@ -446,12 +446,13 @@ public class MyBot : IChessBot
 
         board.MakeMove(firstPVMove);
         TranspositionData? nextPositionFromTTable = tTable.Get(board);
-        while (nextPositionFromTTable != null && nextPositionFromTTable.Depth != 0)
+        while (nextPositionFromTTable != null && nextPositionFromTTable.Depth != 0 && depth != 0)
         {
             if (nextPositionFromTTable.BestMove == null) break;
             pv.Add(nextPositionFromTTable.BestMove);
             board.MakeMove(nextPositionFromTTable.BestMove);
             nextPositionFromTTable = tTable.Get(board);
+            depth--;
         }
         for (int i = 0; i < pv.Count; i++)
         {
