@@ -10,6 +10,9 @@ public class MoveGen : IBoardListener
     private ulong pinnedPieces;
     private bool hasCachedPinnedPieces;
 
+    private ulong discoveredChecks;
+    private bool hasCachedDiscoveredChecks;
+
     private ulong whitePawnAttackBitboard;
     private bool hasCachedWhitePawnAttackBitboard;
 
@@ -92,7 +95,7 @@ public class MoveGen : IBoardListener
         return moves;
     }
 
-    private List<Move> GenerateKingMoves(List<Move> moves, ulong kingBitboard, ulong friendlyPieces, ulong enemyPieces, bool white, bool capturesOnly = false)
+    private List<Move> GenerateKingMoves(List<Move> moves, ulong kingBitboard, ulong friendlyPieces, ulong enemyPieces, bool white, bool capturesOnly = false, bool checksOnly = false)
     {
         ulong kingLSB = BitboardUtility.IsolateLSB(kingBitboard);
         int kingPosition = BitboardUtility.IndexOfLSB(kingLSB);
@@ -104,6 +107,11 @@ public class MoveGen : IBoardListener
         {
             targets &= enemyPieces;
         }
+
+        // King cannot check the opponent king, besides for discoveries
+        // TODO: Fix this, we should only be able to generate moves which land outside of the discovered check line,
+        // as to reveal the check.
+        //if (checksOnly && ((GetDiscoveredChecksBitboard() & kingLSB) == 0)) return moves;
 
         BitboardUtility.ForEachBitscanForward(targets, (targetSquare) =>
         {
@@ -124,7 +132,7 @@ public class MoveGen : IBoardListener
         return moves;
     }
 
-    private List<Move> GenerateCastlingMoves(List<Move> moves, ulong allPieces, bool CWK, bool CWQ, bool CBK, bool CBQ, bool white)
+    private List<Move> GenerateCastlingMoves(List<Move> moves, ulong allPieces, bool CWK, bool CWQ, bool CBK, bool CBQ, bool white, bool checksOnly = false)
     {
         if (board.IsKingInCheck(white)) return moves;
 
@@ -133,12 +141,26 @@ public class MoveGen : IBoardListener
         {
             if (CWK && ((0b11ul << 61) & allPieces) == 0 && ((0b1ul << 61) & board.BlackAttackBitboard) == 0)
             {
+                /*
+                if (!checksOnly | (checksOnly && (Magic.GetRookTargets(board.BlackKingSquare, allPieces) & (1ul<<61)) != 0))
+                {
+                    Move move = new(60, 62, PieceType.WK, PieceType.EMPTY, Move.KingCastleFlag);
+                    if (board.DoesMoveNotPutOwnKingInCheck(move)) moves.Add(move);
+                }
+                */
                 Move move = new(60, 62, PieceType.WK, PieceType.EMPTY, Move.KingCastleFlag);
                 if (board.DoesMoveNotPutOwnKingInCheck(move)) moves.Add(move);
             }
 
             if (CWQ && ((0b111ul << 57) & allPieces) == 0 && ((0b11ul << 58) & board.BlackAttackBitboard) == 0)
             {
+                /*
+                if (!checksOnly | (checksOnly && (Magic.GetRookTargets(board.BlackKingSquare, allPieces) & (1ul<<59)) != 0))
+                {
+                    Move move = new(60, 58, PieceType.WK, PieceType.EMPTY, Move.QueenCastleFlag);
+                    if (board.DoesMoveNotPutOwnKingInCheck(move)) moves.Add(move);
+                }
+                */
                 Move move = new(60, 58, PieceType.WK, PieceType.EMPTY, Move.QueenCastleFlag);
                 if (board.DoesMoveNotPutOwnKingInCheck(move)) moves.Add(move);
             }
@@ -147,12 +169,26 @@ public class MoveGen : IBoardListener
         {
             if (CBK && ((0b1100000ul & allPieces) == 0) && ((0b100000ul & board.WhiteAttackBitboard) == 0))
             {
+                /*
+                if (!checksOnly | (checksOnly && (Magic.GetRookTargets(board.WhiteKingSquare, allPieces) & (1ul<<5)) != 0))
+                {
+                    Move move = new(4, 6, PieceType.BK, PieceType.EMPTY, Move.KingCastleFlag);
+                    if (board.DoesMoveNotPutOwnKingInCheck(move)) moves.Add(move);
+                }
+                */
                 Move move = new(4, 6, PieceType.BK, PieceType.EMPTY, Move.KingCastleFlag);
                 if (board.DoesMoveNotPutOwnKingInCheck(move)) moves.Add(move);
             }
 
             if (CBQ && ((0b1110ul & allPieces) == 0) && ((0b1100) & board.WhiteAttackBitboard) == 0)
             {
+                /*
+                if (!checksOnly | (checksOnly && (Magic.GetRookTargets(board.WhiteKingSquare, allPieces) & (1ul<<3)) != 0))
+                {
+                    Move move = new(4, 2, PieceType.BK, PieceType.EMPTY, Move.QueenCastleFlag);
+                    if (board.DoesMoveNotPutOwnKingInCheck(move)) moves.Add(move);
+                }
+                */
                 Move move = new(4, 2, PieceType.BK, PieceType.EMPTY, Move.QueenCastleFlag);
                 if (board.DoesMoveNotPutOwnKingInCheck(move)) moves.Add(move);
             }
@@ -161,7 +197,7 @@ public class MoveGen : IBoardListener
         return moves;
     }
 
-    public List<Move>  GenerateBlackPawnMoves(List<Move> moves, ulong pawnBitboard, ulong friendlyPieces, ulong enemyPieces, ulong epFile, bool capturesOnly = false)
+    public List<Move>  GenerateBlackPawnMoves(List<Move> moves, ulong pawnBitboard, ulong friendlyPieces, ulong enemyPieces, ulong epFile, bool capturesOnly = false, bool checksOnly = false)
     {
         bool unsafeMove;
 
@@ -172,6 +208,7 @@ public class MoveGen : IBoardListener
 
         ulong captureMask = ulong.MaxValue; // if the king is in check, this is limited to just the attacking piece(s) bitboard
         ulong pushMask = ulong.MaxValue; // if the king is in check, this is limited to the squares between the king and the attacking piece(s)
+        //ulong checkMask = ulong.MaxValue;
 
         if (numAttackers == 1)
         {
@@ -179,12 +216,21 @@ public class MoveGen : IBoardListener
             pushMask = MoveGenData.inBetweenLookupTable[board.BlackKingSquare][BitboardUtility.IndexOfLSB(kingAttackers)];
         }
 
+        /*
+        if (checksOnly)
+        {
+            checkMask = MoveGenData.whitePawnAttacks[board.WhiteKingSquare];
+        }
+        */
+
         BitboardUtility.ForEachBitscanForward(pawnBitboard, (startingIndex) =>
         {
             ulong pawnLSB = 1ul << startingIndex;
 
             if ((pawnLSB & GetPinnedPiecesBitboard()) != 0) unsafeMove = true;
             else unsafeMove = false;
+
+            //if (checksOnly && (pawnLSB & GetDiscoveredChecksBitboard()) != 0) checkMask = ulong.MaxValue;
 
             // Generate attacks
             ulong attackTargets = MoveGenData.blackPawnAttacks[startingIndex];
@@ -194,7 +240,8 @@ public class MoveGen : IBoardListener
             hasCachedBlackPawnAttackBitboard = true;
 
             // Can only attack enemy pieces which are on the capture mask
-            attackTargets &= enemyPieces & captureMask; 
+            attackTargets &= enemyPieces & captureMask;
+            //attackTargets &= enemyPieces & captureMask & checkMask; 
 
             BitboardUtility.ForEachBitscanForward(attackTargets, (targetIndex) => 
             {
@@ -268,6 +315,7 @@ public class MoveGen : IBoardListener
             {
                 target = 1ul << (startingIndex + 16) & ~(friendlyPieces|enemyPieces);
                 target &= pushMask;
+                //target &= pushMask & checkMask;
                 if (target != 0 && ((target>>8)&(friendlyPieces|enemyPieces))==0) // check for obstruction
                 {
                     int targetIndex = BitboardUtility.IndexOfLSB(target);
@@ -289,6 +337,7 @@ public class MoveGen : IBoardListener
             // Single pawn push
             target = 1ul << (startingIndex + 8) & ~(friendlyPieces|enemyPieces);
             target &= pushMask;
+            //target &= pushMask & checkMask;
             if (target != 0) // check for obstruction
             {
                 int targetIndex = BitboardUtility.IndexOfLSB(target);
@@ -490,7 +539,7 @@ public class MoveGen : IBoardListener
         return moves;
     }
 
-    public List<Move> GenerateQueenMoves(List<Move> moves, ulong queenBitboard, ulong friendlyPieces, ulong enemyPieces, bool white, bool captureOnly = false)
+    public List<Move> GenerateQueenMoves(List<Move> moves, ulong queenBitboard, ulong friendlyPieces, ulong enemyPieces, bool white, bool captureOnly = false, bool checksOnly = false)
     {
         bool unsafeMove;
 
@@ -501,6 +550,7 @@ public class MoveGen : IBoardListener
 
         ulong captureMask = ulong.MaxValue; // if the king is in check, this is limited to just the attacking piece(s) bitboard
         ulong pushMask = ulong.MaxValue; // if the king is in check, this is limited to the squares between the king and the attacking piece(s)
+        //ulong checkMask = ulong.MaxValue;
 
         if (numAttackers == 1)
         {
@@ -515,11 +565,20 @@ public class MoveGen : IBoardListener
             pushMask &= enemyPieces;
         }
 
+        /*
+        if (checksOnly)
+        {
+            checkMask = Magic.GetBishopTargets(white ? board.BlackKingSquare : board.WhiteKingSquare, friendlyPieces|enemyPieces) | Magic.GetRookTargets(white ? board.BlackKingSquare : board.WhiteKingSquare, friendlyPieces|enemyPieces);
+        }
+        */
+
         ulong queenLSB = BitboardUtility.IsolateLSB(queenBitboard);
         while (queenLSB != 0)
         {
             if ((queenLSB & GetPinnedPiecesBitboard()) != 0) unsafeMove = true;
             else unsafeMove = false;
+
+            //if (checksOnly && (queenLSB & GetDiscoveredChecksBitboard()) != 0) checkMask = ulong.MaxValue;
 
             int startingIndex = BitboardUtility.IndexOfLSB(queenLSB);
 
@@ -528,6 +587,7 @@ public class MoveGen : IBoardListener
 
             ulong targets = MoveGenData.DiagonalMovesAttackTable[startingIndex][Magic.GetDiagonalAttackTableKey(startingIndex, diagonalBlockerBitboard)] | MoveGenData.OrthogonalMovesAttackTable[startingIndex][Magic.GetOrthogonalAttackTableKey(startingIndex, orthogonalBlockerBitboard)];
             targets &= captureMask|pushMask;
+            //targets &= (captureMask|pushMask) & checkMask;
 
             ulong targetsLSB = BitboardUtility.IsolateLSB(targets);
             while (targetsLSB != 0)
@@ -559,7 +619,7 @@ public class MoveGen : IBoardListener
         return moves;
     }
 
-    public List<Move> GenerateKnightMoves(List<Move> moves, ulong knightBitboard, ulong friendlyPieces, ulong enemyPieces, bool white, bool capturesOnly = false)
+    public List<Move> GenerateKnightMoves(List<Move> moves, ulong knightBitboard, ulong friendlyPieces, ulong enemyPieces, bool white, bool capturesOnly = false, bool checksOnly = false)
     {
         bool unsafeMove;
 
@@ -570,6 +630,7 @@ public class MoveGen : IBoardListener
 
         ulong captureMask = ulong.MaxValue; // if the king is in check, this is limited to just the attacking piece(s) bitboard
         ulong pushMask = ulong.MaxValue; // if the king is in check, this is limited to the squares between the king and the attacking piece(s)
+        //ulong checkMask = ulong.MaxValue;
 
         if (numAttackers == 1)
         {
@@ -584,15 +645,24 @@ public class MoveGen : IBoardListener
             pushMask &= enemyPieces;
         }
 
+        /*
+        if (checksOnly)
+        {
+            checkMask = MoveGenData.knightTargets[white ? board.BlackKingSquare : board.WhiteKingSquare];
+        }
+        */
+
         ulong knightLSB = BitboardUtility.IsolateLSB(knightBitboard);
         while (knightLSB != 0)
         {
             if ((knightLSB & GetPinnedPiecesBitboard()) != 0) unsafeMove = true;
             else unsafeMove = false;
 
+            //if (checksOnly && (knightLSB & GetDiscoveredChecksBitboard()) != 0) checkMask = ulong.MaxValue;
+
             int startingIndex = BitboardUtility.IndexOfLSB(knightLSB);
 
-            ulong targets = MoveGenData.GetKnightTargetsBitboard(startingIndex) & (captureMask|pushMask);
+            ulong targets = MoveGenData.GetKnightTargetsBitboard(startingIndex) & (captureMask|pushMask);//&checkMask;
 
             ulong targetsLSB = BitboardUtility.IsolateLSB(targets);
             while (targetsLSB != 0)
@@ -628,7 +698,7 @@ public class MoveGen : IBoardListener
     /// <summary>
     /// Generates a list of legal bishop moves for the given coloured player.
     /// </summary>
-    public List<Move> GenerateBishopMoves(List<Move> moves, ulong bishopBitboard, ulong friendlyPieces, ulong enemyPieces, bool white, bool capturesOnly = false) 
+    public List<Move> GenerateBishopMoves(List<Move> moves, ulong bishopBitboard, ulong friendlyPieces, ulong enemyPieces, bool white, bool capturesOnly = false, bool checksOnly = false) 
     {
         bool unsafeMove;
         ulong kingAttackers = board.GetKingAttackers(board.IsWhiteToMove);
@@ -638,6 +708,7 @@ public class MoveGen : IBoardListener
 
         ulong captureMask = ulong.MaxValue; // if the king is in check, this is limited to just the attacking piece(s) bitboard
         ulong pushMask = ulong.MaxValue; // if the king is in check, this is limited to the squares between the king and the attacking piece(s)
+        //ulong checkMask = ulong.MaxValue;
 
         if (numAttackers == 1)
         {
@@ -652,16 +723,29 @@ public class MoveGen : IBoardListener
             pushMask &= enemyPieces;
         }
 
+
+        // Must we only generate checks?
+        /*
+        if (checksOnly)
+        {
+            checkMask = Magic.GetBishopTargets(white ? board.BlackKingSquare : board.WhiteKingSquare, friendlyPieces|enemyPieces);
+        }
+        */
+
         ulong bishopLSB = BitboardUtility.IsolateLSB(bishopBitboard);
         while (bishopLSB != 0)
         {
             if ((bishopLSB & GetPinnedPiecesBitboard()) != 0) unsafeMove = true;
             else unsafeMove = false;
 
+            // We can move this bishop anywhere if it leads to a discovered check on the enemy king,
+            // in the case that we only want to search for checks.
+            //if (checksOnly && (bishopLSB & GetDiscoveredChecksBitboard()) != 0) checkMask = ulong.MaxValue;
+
             int startingIndex = BitboardUtility.IndexOfLSB(bishopLSB);
 
             // Get the target bitboard
-            ulong targets = Magic.GetBishopTargets(startingIndex, friendlyPieces|enemyPieces) & (captureMask|pushMask);
+            ulong targets = Magic.GetBishopTargets(startingIndex, friendlyPieces|enemyPieces) & (captureMask|pushMask);//&checkMask;
 
             ulong targetsLSB = BitboardUtility.IsolateLSB(targets);
             while (targetsLSB != 0)
@@ -697,7 +781,7 @@ public class MoveGen : IBoardListener
     /// <summary>
     /// Generates a list of legal rook moves for the given coloured played.
     /// </summary>
-    public List<Move> GenerateRookMoves(List<Move> moves, ulong rookBitboard, ulong friendlyPieces, ulong enemyPieces, bool white, bool capturesOnly = false)
+    public List<Move> GenerateRookMoves(List<Move> moves, ulong rookBitboard, ulong friendlyPieces, ulong enemyPieces, bool white, bool capturesOnly = false, bool checksOnly = false)
     {
         bool unsafeMove;
 
@@ -708,6 +792,7 @@ public class MoveGen : IBoardListener
 
         ulong captureMask = ulong.MaxValue; // if the king is in check, this is limited to just the attacking piece(s) bitboard
         ulong pushMask = ulong.MaxValue; // if the king is in check, this is limited to the squares between the king and the attacking piece(s)
+        //ulong checkMask = ulong.MaxValue;
 
         if (numAttackers == 1)
         {
@@ -721,16 +806,26 @@ public class MoveGen : IBoardListener
             pushMask &= enemyPieces;
         }
 
+        /*
+        if (checksOnly)
+        {
+            checkMask = Magic.GetRookTargets(white ? board.BlackKingSquare : board.WhiteKingSquare, friendlyPieces|enemyPieces);
+        }
+        */
+
         ulong rookLSB = BitboardUtility.IsolateLSB(rookBitboard);
         while (rookLSB != 0)
         {
             if ((rookLSB & GetPinnedPiecesBitboard()) != 0) unsafeMove = true;
             else unsafeMove = false;
 
+            // Even if we only want to generate checks, we need to check if moving this piece anywhere will lead to a discovered attack on the king
+            //if ((rookLSB & GetDiscoveredChecksBitboard()) != 0) checkMask = ulong.MaxValue;
+
             int startingIndex = BitboardUtility.IndexOfLSB(rookLSB);
 
             // Get the rook targets, AND it with the (push OR capture) masks
-            ulong targets = Magic.GetRookTargets(startingIndex, friendlyPieces|enemyPieces) & (captureMask|pushMask);
+            ulong targets = Magic.GetRookTargets(startingIndex, friendlyPieces|enemyPieces) & (captureMask|pushMask);//&checkMask;
 
             ulong targetsLSB = BitboardUtility.IsolateLSB(targets);
             while (targetsLSB != 0)
@@ -780,6 +875,25 @@ public class MoveGen : IBoardListener
         return pinnedPieces;
     }
 
+    public ulong GetDiscoveredChecksBitboard()
+    {
+        if (hasCachedDiscoveredChecks) return discoveredChecks;
+
+        if (board.IsWhiteToMove)
+        {
+            discoveredChecks = MoveGenHelper.GetPinnedPiecesBitboard(board.AllPiecesBitboard, board.WhitePiecesBitboard, board.GetBitboardByPieceType(PieceType.WB), board.GetBitboardByPieceType(PieceType.WR), board.GetBitboardByPieceType(PieceType.WQ), board.BlackKingSquare);
+        }
+        else
+        {
+            discoveredChecks = MoveGenHelper.GetPinnedPiecesBitboard(board.AllPiecesBitboard, board.BlackPiecesBitboard, board.GetBitboardByPieceType(PieceType.BB), board.GetBitboardByPieceType(PieceType.BR), board.GetBitboardByPieceType(PieceType.BQ), board.WhiteKingSquare);
+        }
+
+        hasCachedDiscoveredChecks = true;
+
+        return discoveredChecks;
+
+    }
+
     public ulong BlackPawnAttackBitboard(ulong blackPawnBitboard)
     {
         if (hasCachedBlackPawnAttackBitboard) return blackPawnBitboard;
@@ -809,8 +923,10 @@ public class MoveGen : IBoardListener
     {
         legalMoves = new();
         hasCachedLegalMoves = false;
-        hasCachedPinnedPieces = new();
+        pinnedPieces = new();
         hasCachedPinnedPieces = false;
+        discoveredChecks = new();
+        hasCachedDiscoveredChecks = false;
         whitePawnAttackBitboard = 0ul;
         hasCachedWhitePawnAttackBitboard = false;
         blackPawnAttackBitboard = 0ul;
