@@ -8,6 +8,11 @@ public static class Evaluation
 
     public const double PositionalWeight = 0.25;
     public const int KingInCheckPenalty = 200;
+    public const int PawnStructureWeight = 5;
+    public const int BishopPairBonus = 50;
+    public const double UndefendedMinorPieceWeight = 0.5;
+    public const int PassedPawnBonus = 15;
+    public const int kingVirtualMobilityWeight = 3;
 
     /// <summary>
     /// Values for the different piece types.
@@ -234,12 +239,20 @@ public static class Evaluation
         int endgamePositionalScore = 0;
         int endgameMaterialScore = 0;
 
+        int pawnStructureScore = 0;
+
+        int passedPawns = 0;
+
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.WP), (pawnIndex) => {
             openingMaterialScore += materialWeights[0][0];
             openingPositionalScore += pieceSquareTable[0][0][pawnIndex];
 
             endgameMaterialScore += materialWeights[1][0];
             endgamePositionalScore += pieceSquareTable[1][0][pawnIndex];
+
+            // Pawn structure:
+            ulong pawnBuddies = MoveGenData.whitePawnAttacks[pawnIndex] | MoveGenData.blackPawnAttacks[pawnIndex];
+            pawnStructureScore += PawnStructureWeight * BitboardUtility.CountSetBits(pawnBuddies & board.GetBitboardByPieceType(PieceType.WP));
 
         });
 
@@ -249,6 +262,9 @@ public static class Evaluation
 
             endgameMaterialScore += materialWeights[1][6];
             endgamePositionalScore += -pieceSquareTable[1][0][mirror[pawnIndex]];
+
+            ulong pawnBuddies = MoveGenData.whitePawnAttacks[pawnIndex] | MoveGenData.blackPawnAttacks[pawnIndex];
+            pawnStructureScore -= PawnStructureWeight * BitboardUtility.CountSetBits(pawnBuddies & board.GetBitboardByPieceType(PieceType.BP));
         });
 
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.WN), (knightIndex) => {
@@ -261,8 +277,8 @@ public static class Evaluation
             // Penalty for having a minor piece on an undefended square
             if (!BitboardUtility.IsBitSet(board.WhiteAttackBitboard, knightIndex))
             {
-                openingPositionalScore -= GetOpeningPieceValue(PieceType.WN);
-                endgamePositionalScore -= GetEndgamePieceValue(PieceType.WN);
+                openingPositionalScore -= (int)(UndefendedMinorPieceWeight * GetOpeningPieceValue(PieceType.WN));
+                endgamePositionalScore -= (int)(UndefendedMinorPieceWeight * GetEndgamePieceValue(PieceType.WN));
             }
 
             gamePhase += gamePhaseInc[1];
@@ -277,14 +293,18 @@ public static class Evaluation
 
             if (!BitboardUtility.IsBitSet(board.BlackAttackBitboard, knightIndex))
             {
-                openingPositionalScore += GetOpeningPieceValue(PieceType.BN);
-                endgamePositionalScore += GetEndgamePieceValue(PieceType.BN);
+                openingPositionalScore += (int)(UndefendedMinorPieceWeight * GetOpeningPieceValue(PieceType.BN));
+                endgamePositionalScore += (int)(UndefendedMinorPieceWeight * GetEndgamePieceValue(PieceType.BN));
             }
 
             gamePhase += gamePhaseInc[1];
         });
 
+        int whiteBishopCount = 0;
+
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.WB), (bishopIndex) => {
+            whiteBishopCount++;
+
             openingMaterialScore += materialWeights[0][2];
             openingPositionalScore += pieceSquareTable[0][2][bishopIndex];
 
@@ -293,14 +313,18 @@ public static class Evaluation
 
             if (!BitboardUtility.IsBitSet(board.WhiteAttackBitboard, bishopIndex))
             {
-                openingPositionalScore -= GetOpeningPieceValue(PieceType.WB);
-                endgamePositionalScore -= GetEndgamePieceValue(PieceType.WB);
+                openingPositionalScore -= (int)(UndefendedMinorPieceWeight * GetOpeningPieceValue(PieceType.WB));
+                endgamePositionalScore -= (int)(UndefendedMinorPieceWeight * GetEndgamePieceValue(PieceType.WB));
             }
 
             gamePhase += gamePhaseInc[2];
         });
 
+        int blackBishopCount = 0;
+
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.BB), (bishopIndex) => {
+            blackBishopCount++;
+
             openingMaterialScore += materialWeights[0][8];
             openingPositionalScore += -pieceSquareTable[0][2][mirror[bishopIndex]];
 
@@ -309,8 +333,8 @@ public static class Evaluation
 
             if (!BitboardUtility.IsBitSet(board.BlackAttackBitboard, bishopIndex))
             {
-                openingPositionalScore += GetOpeningPieceValue(PieceType.BB);
-                endgamePositionalScore += GetEndgamePieceValue(PieceType.BB);
+                openingPositionalScore += (int)(UndefendedMinorPieceWeight * GetOpeningPieceValue(PieceType.BB));
+                endgamePositionalScore += (int)(UndefendedMinorPieceWeight * GetEndgamePieceValue(PieceType.BB));
             }
 
             gamePhase += gamePhaseInc[2];
@@ -372,6 +396,16 @@ public static class Evaluation
             endgamePositionalScore += -pieceSquareTable[1][5][mirror[kingIndex]];
         });
 
+        // Passed pawn bonus:
+        foreach (ulong fileMask in MoveGenData.FileMasks)
+        {
+            int numWhitePawns = BitboardUtility.CountSetBits(fileMask & board.GetBitboardByPieceType(PieceType.WP));
+            int numBlackPawns = BitboardUtility.CountSetBits(fileMask & board.GetBitboardByPieceType(PieceType.BP));
+
+            if ((numWhitePawns == 0) && (numBlackPawns > 0)) passedPawns--;
+            else if ((numBlackPawns == 0) && (numWhitePawns > 0)) passedPawns++;
+        }
+
         // Tapered evaluation:
 
         int openingScore = (int)(openingMaterialScore + PositionalWeight * openingPositionalScore);
@@ -383,7 +417,7 @@ public static class Evaluation
 
         int endGamePhase = 24 - gamePhase;
 
-        int eval = (openingScore * gamePhase + endgameScore * endGamePhase) / 24;
+        int eval = (int)((openingScore * gamePhase + endgameScore * endGamePhase) / 24.0);
 
         // Penalty for being in check:
 
@@ -395,6 +429,30 @@ public static class Evaluation
         {
             eval += KingInCheckPenalty;
         }
+
+        // Bishop pair bonus:
+        if (whiteBishopCount >= 2) eval += BishopPairBonus;
+
+        // Pawn structure:
+        if (blackBishopCount >= 2) eval -= BishopPairBonus;
+
+        // KING SAFETY:
+        // The "virtual mobility" of the king
+        ulong allPieces = board.AllPiecesBitboard;
+        int whiteKingSquare = board.WhiteKingSquare;
+        int blackKingSquare = board.BlackKingSquare;
+
+        /*
+        int whiteKingVirtualMobility = kingVirtualMobilityWeight * BitboardUtility.CountSetBits(Magic.GetRookTargets(whiteKingSquare, allPieces) | Magic.GetBishopTargets(whiteKingSquare, allPieces));
+        int blackKingVirtualMobility = kingVirtualMobilityWeight * BitboardUtility.CountSetBits(Magic.GetRookTargets(blackKingSquare, allPieces) | Magic.GetBishopTargets(blackKingSquare, allPieces));
+
+        eval -= (int)(gamePhase/24.0 * whiteKingVirtualMobility);
+        eval += (int)(gamePhase/24.0 * blackKingVirtualMobility);
+        */
+
+        eval += pawnStructureScore;
+
+        eval += PassedPawnBonus * passedPawns;
 
         return eval;
     }
