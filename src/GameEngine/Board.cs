@@ -21,6 +21,7 @@ public sealed class Board
     private bool isWhiteToMove;
 
     private ulong zobristHash;
+    private ulong pawnZobristHash;
 
     // CACHE:
     private ulong whiteAttackBitboard;
@@ -61,6 +62,7 @@ public sealed class Board
         halfMoveCount = 0;
         fullMoveCount = 0;
         LoadPositionFromFen(fen);
+        pawnZobristHash = Zobrist.GetPawnZobristHash(this);
     }
 
     /// <summary>
@@ -120,6 +122,9 @@ public sealed class Board
         PieceType movingPiece = move.MovingPiece;
         PieceType capturedPiece = move.CapturedPiece;
 
+        bool isPawnMove = movingPiece == PieceType.WP || movingPiece == PieceType.BP;
+        bool isPawnCapture = capturedPiece == PieceType.WP || capturedPiece == PieceType.BP;
+
         bool white = MoveUtility.GetPieceColour(movingPiece) == 0;
 
         ulong newZobristHash = zobristHash;
@@ -164,14 +169,20 @@ public sealed class Board
         bitboards[(int)movingPiece] ^= fromBitboard;
         newZobristHash ^= Zobrist.zArray[(int)movingPiece][from];
 
+        if (isPawnMove) 
+        {
+            pawnZobristHash ^= Zobrist.zArray[(int)movingPiece][from];
+            pawnZobristHash ^= Zobrist.zArray[(int)movingPiece][to];
+        }
+
         if (!move.IsPromotion())
         {
             bitboards[(int)movingPiece] ^= toBitboard;
             newZobristHash ^= Zobrist.zArray[(int)movingPiece][to];
-
         }
         else
         {
+            pawnZobristHash ^= Zobrist.zArray[(int)movingPiece][to];
             switch (move.Flag) {
                 case Move.KnightPromoCaptureFlag:
                 case Move.KnightPromotionFlag:
@@ -263,12 +274,18 @@ public sealed class Board
             if (move.IsEnPassant())
             {
                 bitboards[(int)capturedPiece] ^= isWhiteToMove ? toBitboard << 8 : toBitboard >> 8;
-                newZobristHash ^= Zobrist.zArray[(int)capturedPiece][isWhiteToMove ? to + 8 : to - 8];
+                ulong zobristUpdate = Zobrist.zArray[(int)capturedPiece][isWhiteToMove ? to + 8 : to - 8];
+                newZobristHash ^= zobristUpdate;
+                pawnZobristHash ^= zobristUpdate;
             }
             else
             {
                 bitboards[(int)capturedPiece] ^= toBitboard;
                 newZobristHash ^= Zobrist.zArray[(int)capturedPiece][to];
+                if (isPawnCapture)
+                {
+                    pawnZobristHash ^= Zobrist.zArray[(int)capturedPiece][to];
+                }
             }
 
             if (to == 63) 
@@ -878,5 +895,7 @@ public sealed class Board
     }
 
     public int NumPlyPlayed => stateHistory.Count;
+
+    public ulong PawnZobristHash => pawnZobristHash;
 
 }

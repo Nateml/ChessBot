@@ -37,6 +37,20 @@ public static class Zobrist
         zBlackMove = GetRandom64();
     }
 
+    public static ulong GetPawnZobristHash(Board board)
+    {
+        ulong zKey = 0ul;
+
+        BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.WP), pawnIndex => {
+            zKey ^= zArray[(int)PieceType.WP][pawnIndex];
+        });
+        BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.BP), pawnIndex => {
+            zKey ^= zArray[(int)PieceType.BP][pawnIndex];
+        });
+
+        return zKey;
+    }
+
     public static ulong GetZobristHash(Board board)
     {
         ulong zKey = 0ul;

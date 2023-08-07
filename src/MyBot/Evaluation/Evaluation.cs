@@ -9,13 +9,13 @@ public static class Evaluation
     public const double PieceSquareWeight = 0.35;
     public const int KingInCheckPenalty = 60;
     public const int PawnStructureWeight = 5;
-    public const int BishopPairBonus = 60;
+    public const int BishopPairBonus = 50;
     public const double UndefendedMinorPieceWeight = 0.5;
     public const int PassedPawnBonus = 15;
     public const int kingVirtualMobilityWeight = 5;
     //public const int KnightMobilityWeight = 1;
     //public const int BishopMobilityWeight = 1;
-    public const int mobilityWeight = 3;
+    public const int mobilityWeight = 1;
 
     /// <summary>
     /// Values for the different piece types.
@@ -251,22 +251,12 @@ public static class Evaluation
 
         ulong allPiecesBitboard = board.AllPiecesBitboard;
 
-        int pawnStructureScore = 0;
-
-        int passedPawns = 0;
-
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.WP), (pawnIndex) => {
             openingMaterialScore += materialWeights[0][0];
             openingPositionalScore += pieceSquareTable[0][0][pawnIndex];
 
             endgameMaterialScore += materialWeights[1][0];
             endgamePositionalScore += pieceSquareTable[1][0][pawnIndex];
-
-            // Pawn structure:
-            /*
-            ulong pawnBuddies = MoveGenData.whitePawnAttacks[pawnIndex] | MoveGenData.blackPawnAttacks[pawnIndex];
-            pawnStructureScore += PawnStructureWeight * BitboardUtility.CountSetBits(pawnBuddies & board.GetBitboardByPieceType(PieceType.WP));
-            */
 
         });
 
@@ -277,10 +267,6 @@ public static class Evaluation
             endgameMaterialScore += materialWeights[1][6];
             endgamePositionalScore += -pieceSquareTable[1][0][mirror[pawnIndex]];
 
-            /*
-            ulong pawnBuddies = MoveGenData.whitePawnAttacks[pawnIndex] | MoveGenData.blackPawnAttacks[pawnIndex];
-            pawnStructureScore -= PawnStructureWeight * BitboardUtility.CountSetBits(pawnBuddies & board.GetBitboardByPieceType(PieceType.BP));
-            */
         });
 
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.WN), (knightIndex) => {
@@ -444,6 +430,8 @@ public static class Evaluation
         int endGamePhase = 24 - gamePhase;
 
         int eval = (int)((openingScore * gamePhase + endgameScore * endGamePhase) / 24.0);
+
+        eval += PawnStructure.EvaluatePawnStructure(board);
 
         // Knight and bishop mobility:
         whiteMobilityBitboard &= ~blackPawnAttackBitboard & ~board.WhitePiecesBitboard;
