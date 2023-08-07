@@ -6,13 +6,16 @@ using ChessBot;
 public static class Evaluation
 {
 
-    public const double PositionalWeight = 0.35;
-    public const int KingInCheckPenalty = 200;
+    public const double PieceSquareWeight = 0.35;
+    public const int KingInCheckPenalty = 60;
     public const int PawnStructureWeight = 5;
-    public const int BishopPairBonus = 80;
+    public const int BishopPairBonus = 60;
     public const double UndefendedMinorPieceWeight = 0.5;
     public const int PassedPawnBonus = 15;
     public const int kingVirtualMobilityWeight = 5;
+    //public const int KnightMobilityWeight = 1;
+    //public const int BishopMobilityWeight = 1;
+    public const int mobilityWeight = 3;
 
     /// <summary>
     /// Values for the different piece types.
@@ -239,6 +242,15 @@ public static class Evaluation
         int endgamePositionalScore = 0;
         int endgameMaterialScore = 0;
 
+        // not considering pawns in mobility
+        ulong whiteMobilityBitboard = 0ul;
+        ulong blackMobilityBitboard = 0ul;
+
+        ulong whitePawnAttackBitboard = board.WhitePawnAttackBitboard;
+        ulong blackPawnAttackBitboard = board.BlackPawnAttackBitboard;
+
+        ulong allPiecesBitboard = board.AllPiecesBitboard;
+
         int pawnStructureScore = 0;
 
         int passedPawns = 0;
@@ -278,6 +290,8 @@ public static class Evaluation
             endgameMaterialScore += materialWeights[1][1];
             endgamePositionalScore += pieceSquareTable[1][1][knightIndex];
 
+            whiteMobilityBitboard |= MoveGenData.knightTargets[knightIndex];
+
             // Penalty for having a minor piece on an undefended square
             if (!BitboardUtility.IsBitSet(board.WhiteAttackBitboard, knightIndex))
             {
@@ -294,6 +308,8 @@ public static class Evaluation
 
             endgameMaterialScore += materialWeights[1][7];
             endgamePositionalScore += -pieceSquareTable[1][1][mirror[knightIndex]];
+
+            blackMobilityBitboard |= MoveGenData.knightTargets[knightIndex];
 
             if (!BitboardUtility.IsBitSet(board.BlackAttackBitboard, knightIndex))
             {
@@ -315,6 +331,8 @@ public static class Evaluation
             endgameMaterialScore += materialWeights[1][2];
             endgamePositionalScore += pieceSquareTable[1][2][bishopIndex];
 
+            whiteMobilityBitboard |= Magic.GetBishopTargets(bishopIndex, allPiecesBitboard);
+
             if (!BitboardUtility.IsBitSet(board.WhiteAttackBitboard, bishopIndex))
             {
                 openingPositionalScore -= (int)(UndefendedMinorPieceWeight * GetOpeningPieceValue(PieceType.WB));
@@ -334,6 +352,8 @@ public static class Evaluation
 
             endgameMaterialScore += materialWeights[1][8];
             endgamePositionalScore += -pieceSquareTable[1][2][mirror[bishopIndex]];
+
+            blackMobilityBitboard |= Magic.GetBishopTargets(bishopIndex, allPiecesBitboard);
 
             if (!BitboardUtility.IsBitSet(board.BlackAttackBitboard, bishopIndex))
             {
@@ -414,8 +434,8 @@ public static class Evaluation
 
         // Tapered evaluation:
 
-        int openingScore = (int)(openingMaterialScore + PositionalWeight * openingPositionalScore);
-        int endgameScore = (int)(endgameMaterialScore + PositionalWeight * endgamePositionalScore);
+        int openingScore = (int)(openingMaterialScore + PieceSquareWeight * openingPositionalScore);
+        int endgameScore = (int)(endgameMaterialScore + PieceSquareWeight * endgamePositionalScore);
 
         if (gamePhase > 24) gamePhase = 24; // In case of early promotion
 
@@ -424,6 +444,14 @@ public static class Evaluation
         int endGamePhase = 24 - gamePhase;
 
         int eval = (int)((openingScore * gamePhase + endgameScore * endGamePhase) / 24.0);
+
+        // Knight and bishop mobility:
+        whiteMobilityBitboard &= ~blackPawnAttackBitboard & ~board.WhitePiecesBitboard;
+        blackMobilityBitboard &= ~whitePawnAttackBitboard & ~board.BlackPiecesBitboard;
+
+        eval += BitboardUtility.CountSetBits(whiteMobilityBitboard) * mobilityWeight;
+        eval -= BitboardUtility.CountSetBits(blackMobilityBitboard) * mobilityWeight;
+
 
         // Penalty for being in check:
 
@@ -446,6 +474,7 @@ public static class Evaluation
         // Having an file with no pawns adjecent to the king is bad
 
         // The "virtual mobility" of the king
+        /*
         ulong allPieces = board.AllPiecesBitboard;
         int whiteKingSquare = board.WhiteKingSquare;
         int blackKingSquare = board.BlackKingSquare;
@@ -455,6 +484,7 @@ public static class Evaluation
 
         eval -= (int)(gamePhase/24.0 * whiteKingVirtualMobility);
         eval += (int)(gamePhase/24.0 * blackKingVirtualMobility);
+        */
 
         //eval += pawnStructureScore;
 
