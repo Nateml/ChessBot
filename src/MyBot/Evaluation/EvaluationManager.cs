@@ -20,6 +20,9 @@ public class EvaluationManager
         gamePhase.Update(move);
         material.Update(move);
         pieceSquare.Update(move);
+
+
+
         moveHistory.Push(move);
     }
 

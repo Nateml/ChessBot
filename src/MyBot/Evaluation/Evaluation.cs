@@ -8,7 +8,7 @@ using static MaterialEvaluation;
 public static class Evaluation
 {
 
-    public const double PositionalWeight = 0.25;
+    public const double PositionalWeight = 0.4;
     public const int KingInCheckPenalty = 60;
 
     /// <summary>
