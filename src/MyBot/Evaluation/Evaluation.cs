@@ -10,8 +10,6 @@ public static class Evaluation
 
     public const double PositionalWeight = 0.4;
     public const int KingInCheckPenalty = 60;
-    public const int BishopPairBonus = 60;
-    //public const int KnightMobilityWeight = 5;
 
     /// <summary>
     /// Returns a static evaluation of the board.
@@ -77,11 +75,6 @@ public static class Evaluation
         int eval = (int)(evalManager.MaterialScore + PositionalWeight * evalManager.PieceSquareScore);
 
         eval += (int)(PositionalWeight * (openingPositionalScore * evalManager.GamePhase + endgamePositionalScore * (24-evalManager.GamePhase)) / 24.0);
-
-        if (whiteBishopCount >= 2) eval += BishopPairBonus;
-        if (blackBishopCount >= 2) eval -= BishopPairBonus;
-
-        //eval += KnightMobilityWeight * knightMobility;
 
         // Penalty for being in check:
         if (board.IsKingInCheck(true))
