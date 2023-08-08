@@ -7,6 +7,7 @@ class UCI
 
     private static Board board = new();
     private static IChessBot bot = new MyBot();
+    private static EvaluationManager evalManager = new(board);
 
     private static bool hasStopBeenRequested = false;
 
@@ -53,6 +54,8 @@ class UCI
             if (input == "transposition table stats") InputTranspositionTableStats();
             if (input == "rapid engine test") InputRapidEngineTest();
             if (input == "zobrist test") InputZobristTest();
+            if (input == "eval static") InputEvalStatic();
+            if (input == "undo move") InputUndoMove();
             if (input == "quit") InputQuit();
         }
     }
@@ -67,6 +70,15 @@ class UCI
     static void InputZobristTest()
     {
         ZobristTest.Test();
+    }
+
+    static void InputEvalStatic()
+    {
+        Console.WriteLine(evalManager.GamePhase);
+        Console.WriteLine(evalManager.MaterialScore);
+        Console.WriteLine(evalManager.PieceSquareScore);
+        int eval = Evaluation.EvaluateBoard(board, evalManager);
+        Console.WriteLine(eval);
     }
 
     static void InputRapidEngineTest()
@@ -108,6 +120,12 @@ class UCI
 
     }
 
+    static void InputUndoMove()
+    {
+        board.UnmakeMove();
+        evalManager.Undo();
+    }
+
     static void InputIsReady()
     {
         if (board != null && bot != null)
@@ -139,6 +157,7 @@ class UCI
         }
 
         board = new(fen);
+        evalManager = new(board);
         board.AttachListener(board.moveGen);
 
         // TODO: Add logic for making moves from input string
@@ -152,6 +171,7 @@ class UCI
                 {
                     Move move = MoveUtility.ConvertFromAlgebraic(algebraicMove, board);
                     board.MakeMove(move);
+                    evalManager.Update(move);
                 }
             }
         }

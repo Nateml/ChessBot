@@ -1,26 +1,7 @@
 namespace ChessBot;
-using System.ComponentModel;
-using System.Reflection.Metadata;
-using ChessBot;
 
-public static class Evaluation
+public class PieceSquare 
 {
-
-    public const double PositionalWeight = 0.40;
-    public const int KingInCheckPenalty = 60;
-    public const int BishopPairBonus = 60;
-
-    /// <summary>
-    /// Values for the different piece types.
-    /// Indexed first by opening/endgame, and then by PieceType.
-    /// </summary>
-    public static readonly int[][] materialWeights = {
-        // Opening material weights
-        new int[] {89, 308, 319, 488, 888, 20001, -92, -307, -323, -492, -888, -20002},
-
-        // Endgame material weights
-        new int[] {96, 319, 331, 497, 853, 19998, -102, -318, -334, -501, -845, -20000}
-    };
 
     /// <summary>
     /// Piece-square table.
@@ -199,311 +180,265 @@ public static class Evaluation
         0,   1,  2,  3,  4,  5,  6,  7    
     };
 
+    private int openingVal = 0;
+    private int endgameVal = 0;
 
-    /// <summary>
-    /// Used to increment the game phase value.
-    /// Indexed as follows:
-    /// 0: pawn
-    /// 1: knight
-    /// 2: bishop
-    /// 3: rook
-    /// 4: queen
-    /// 5: king
-    /// </summary>
-    public static readonly int[] gamePhaseInc = {0, 1, 1, 2, 4, 0};
-
-    public static int cachedGamePhase = 24;
-
-    /// <summary>
-    /// Returns a static evaluation of the board.
-    /// </summary>
-    public static int EvaluateBoard(Board board)
+    public PieceSquare(Board board)
     {
-        // We keep track of seperate opening/endgame score
-        // which are then tapered according to the game phase, 
-        // which is a continuous estimate, according to piece values (see gamePhaseInc),
-        // of what game phase we are in.
-        // These scores are calculated by the material weights of the player's pieces,
-        // as well as a piece-squares table (multiplied by a positional weight)
-        // to evaluation the position.
-
-        int gamePhase = 0;
-
         int openingPositionalScore = 0;
-        int openingMaterialScore = 0;
-
         int endgamePositionalScore = 0;
-        int endgameMaterialScore = 0;
-
-        int whiteBishopCount = 0;
-        int blackBishopCount = 0;
 
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.WP), (pawnIndex) => {
-            openingMaterialScore += materialWeights[0][0];
             openingPositionalScore += pieceSquareTable[0][0][pawnIndex];
 
-            endgameMaterialScore += materialWeights[1][0];
             endgamePositionalScore += pieceSquareTable[1][0][pawnIndex];
-
         });
 
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.BP), (pawnIndex) => {
-            openingMaterialScore += materialWeights[0][6];
             openingPositionalScore += -pieceSquareTable[0][0][mirror[pawnIndex]];
 
-            endgameMaterialScore += materialWeights[1][6];
             endgamePositionalScore += -pieceSquareTable[1][0][mirror[pawnIndex]];
         });
 
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.WN), (knightIndex) => {
-            openingMaterialScore += materialWeights[0][1];
             openingPositionalScore += pieceSquareTable[0][1][knightIndex];
 
-            endgameMaterialScore += materialWeights[1][1];
             endgamePositionalScore += pieceSquareTable[1][1][knightIndex];
-
-            // Penalty for having a minor piece on an undefended square
-            if (!BitboardUtility.IsBitSet(board.WhiteAttackBitboard, knightIndex))
-            {
-                openingPositionalScore -= GetOpeningPieceValue(PieceType.WN);
-                endgamePositionalScore -= GetEndgamePieceValue(PieceType.WN);
-            }
-
-            gamePhase += gamePhaseInc[1];
         });
 
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.BN), (knightIndex) => {
-            openingMaterialScore += materialWeights[0][7];
             openingPositionalScore += -pieceSquareTable[0][1][mirror[knightIndex]];
 
-            endgameMaterialScore += materialWeights[1][7];
             endgamePositionalScore += -pieceSquareTable[1][1][mirror[knightIndex]];
-
-            if (!BitboardUtility.IsBitSet(board.BlackAttackBitboard, knightIndex))
-            {
-                openingPositionalScore += GetOpeningPieceValue(PieceType.BN);
-                endgamePositionalScore += GetEndgamePieceValue(PieceType.BN);
-            }
-
-            gamePhase += gamePhaseInc[1];
         });
 
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.WB), (bishopIndex) => {
-            whiteBishopCount++;
-
-            openingMaterialScore += materialWeights[0][2];
             openingPositionalScore += pieceSquareTable[0][2][bishopIndex];
 
-            endgameMaterialScore += materialWeights[1][2];
             endgamePositionalScore += pieceSquareTable[1][2][bishopIndex];
-
-            if (!BitboardUtility.IsBitSet(board.WhiteAttackBitboard, bishopIndex))
-            {
-                openingPositionalScore -= GetOpeningPieceValue(PieceType.WB);
-                endgamePositionalScore -= GetEndgamePieceValue(PieceType.WB);
-            }
-
-            gamePhase += gamePhaseInc[2];
         });
 
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.BB), (bishopIndex) => {
-            blackBishopCount++;
-
-            openingMaterialScore += materialWeights[0][8];
             openingPositionalScore += -pieceSquareTable[0][2][mirror[bishopIndex]];
 
-            endgameMaterialScore += materialWeights[1][8];
             endgamePositionalScore += -pieceSquareTable[1][2][mirror[bishopIndex]];
-
-            if (!BitboardUtility.IsBitSet(board.BlackAttackBitboard, bishopIndex))
-            {
-                openingPositionalScore += GetOpeningPieceValue(PieceType.BB);
-                endgamePositionalScore += GetEndgamePieceValue(PieceType.BB);
-            }
-
-            gamePhase += gamePhaseInc[2];
         });
 
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.WR), (rookIndex) => {
-            openingMaterialScore += materialWeights[0][3];
             openingPositionalScore += pieceSquareTable[0][3][rookIndex];
 
-            endgameMaterialScore += materialWeights[1][3];
             endgamePositionalScore += pieceSquareTable[1][3][rookIndex];
-
-            gamePhase += gamePhaseInc[3];
         });
 
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.BR), (rookIndex) => {
-            openingMaterialScore += materialWeights[0][9];
             openingPositionalScore += -pieceSquareTable[0][3][mirror[rookIndex]];
 
-            endgameMaterialScore += materialWeights[1][9];
             endgamePositionalScore += -pieceSquareTable[1][3][mirror[rookIndex]];
-
-            gamePhase += gamePhaseInc[3];
         });
 
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.WQ), (queenIndex) => {
-            openingMaterialScore += materialWeights[0][4];
             openingPositionalScore += pieceSquareTable[0][4][queenIndex];
 
-            endgameMaterialScore += materialWeights[1][4];
             endgamePositionalScore += pieceSquareTable[1][4][queenIndex];
-
-            gamePhase += gamePhaseInc[4];
         });
 
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.BQ), (queenIndex) => {
-            openingMaterialScore += materialWeights[0][10];
             openingPositionalScore += -pieceSquareTable[0][4][mirror[queenIndex]];
 
-            endgameMaterialScore += materialWeights[1][10];
             endgamePositionalScore += -pieceSquareTable[1][4][mirror[queenIndex]];
-
-            gamePhase += gamePhaseInc[4];
         });
 
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.WK), (kingIndex) => {
-            openingMaterialScore += materialWeights[0][5];
             openingPositionalScore += pieceSquareTable[0][5][kingIndex];
 
-            endgameMaterialScore += materialWeights[1][5];
             endgamePositionalScore += pieceSquareTable[1][5][kingIndex];
         });
 
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.BK), (kingIndex) => {
-            openingMaterialScore += materialWeights[0][11];
             openingPositionalScore += -pieceSquareTable[0][5][mirror[kingIndex]];
 
-            endgameMaterialScore += materialWeights[1][11];
             endgamePositionalScore += -pieceSquareTable[1][5][mirror[kingIndex]];
         });
 
-        // Tapered evaluation:
-
-        int openingScore = (int)(openingMaterialScore + PositionalWeight * openingPositionalScore);
-        int endgameScore = (int)(endgameMaterialScore + PositionalWeight * endgamePositionalScore);
-
-        if (gamePhase > 24) gamePhase = 24; // In case of early promotion
-
-        cachedGamePhase = gamePhase;
-
-        int endGamePhase = 24 - gamePhase;
-
-        int eval = (openingScore * gamePhase + endgameScore * endGamePhase) / 24;
-
-        // Penalty for being in check:
-
-        if (board.IsKingInCheck(true))
-        {
-            eval -= KingInCheckPenalty;
-        }
-        else if (board.IsKingInCheck(false))
-        {
-            eval += KingInCheckPenalty;
-        }
-
-        if (whiteBishopCount >= 2) eval += BishopPairBonus;
-        if (blackBishopCount >= 2) eval -= BishopPairBonus;
-
-        return eval;
+        openingVal = openingPositionalScore;
+        endgameVal = endgamePositionalScore;
     }
 
-    public static int EvaluateMove(Move move, Board board, KillerMoves killerMoves, int distanceFromRoot)
+
+    public void Undo(Move move)
     {
-        int score = 0;
+        PieceType movingPiece = move.MovingPiece;
+        int colour = PieceUtility.Colour(movingPiece);
+        int to = move.To;
+        int from = move.From;
+        PieceType capturedPiece;
 
-        const int KillerValue = 1000;
-
-        if (move.IsCapture())
+        if (move.GetPromotionType() != null)
         {
-            score = 100*GetOpeningPieceValue(move.CapturedPiece) - GetOpeningPieceValue(move.MovingPiece);
-        }
-        else if (killerMoves.Contains(move, distanceFromRoot))
-        {
-            score = KillerValue;
-        }
-
-        if (move.IsPromotion())
-        {
-            switch (move.Flag)
+            if (colour == 0)
             {
-                    case Move.KnightPromoCaptureFlag:
-                    case Move.KnightPromotionFlag:
-                        score += GetOpeningPieceValue(PieceType.WN);
-                        break;
-                    case Move.BishopPromoCaptureFlag:
-                    case Move.BishopPromotionFlag:
-                        score += GetOpeningPieceValue(PieceType.WB);
-                        break;
-                    case Move.RookPromoCaptureFlag:
-                    case Move.RookPromotionFlag:
-                        score += GetOpeningPieceValue(PieceType.WR);
-                        break;
-                    case Move.QueenPromoCaptureFlag:
-                    case Move.QueenPromotionFlag:
-                        score += GetOpeningPieceValue(PieceType.WQ);
-                        break;
+                openingVal -= pieceSquareTable[0][(int)move.GetPromotionType()][to];
+                endgameVal -= pieceSquareTable[1][(int)move.GetPromotionType()][to];
+
+                // Add back the promoting pawn
+                openingVal += pieceSquareTable[0][0][from];
+                endgameVal += pieceSquareTable[1][0][from];
+
+                if (!move.IsCapture()) return;
+
+                // Add back the captured piece
+                capturedPiece = move.CapturedPiece;
+                openingVal += pieceSquareTable[0][(int)capturedPiece - 6][to];
+                endgameVal += pieceSquareTable[1][(int)capturedPiece - 6][to];
             }
+            else
+            {
+                openingVal += pieceSquareTable[0][(int)move.GetPromotionType()][mirror[to]];
+                endgameVal += pieceSquareTable[1][(int)move.GetPromotionType()][mirror[to]];
+
+                // Add back the promoting pawn
+                openingVal -= pieceSquareTable[0][0][mirror[from]];
+                endgameVal -= pieceSquareTable[1][0][mirror[from]];
+
+                if (!move.IsCapture()) return;
+
+                // Add back the captured piece
+                capturedPiece = move.CapturedPiece;
+                openingVal -= pieceSquareTable[0][(int)capturedPiece][mirror[to]];
+                endgameVal -= pieceSquareTable[1][(int)capturedPiece][mirror[to]];
+            }
+
+            return;
         }
 
-        if (cachedGamePhase > 12)
+        if (colour == 0)
         {
-            score += GetOpeningPieceSquareScore(move.MovingPiece, move.To);
+            // Remove To
+            openingVal -= pieceSquareTable[0][(int)movingPiece][to];
+            endgameVal -= pieceSquareTable[1][(int)movingPiece][to];
+
+            // Add from
+            openingVal += pieceSquareTable[0][(int)movingPiece][from];
+            endgameVal += pieceSquareTable[1][(int)movingPiece][from];
+
+            if (!move.IsCapture()) return;
+
+            // Add back the captured piece
+            capturedPiece = move.CapturedPiece;
+            openingVal += pieceSquareTable[0][(int)capturedPiece - 6][to];
+            endgameVal += pieceSquareTable[1][(int)capturedPiece - 6][to];
+        }
+        else
+        {
+            // Remove To
+            openingVal += pieceSquareTable[0][(int)movingPiece - 6][mirror[to]];
+            endgameVal += pieceSquareTable[1][(int)movingPiece - 6][mirror[to]];
+
+            // Add from
+            openingVal -= pieceSquareTable[0][(int)movingPiece - 6][mirror[from]];
+            endgameVal -= pieceSquareTable[1][(int)movingPiece - 6][mirror[from]];
+
+            if (!move.IsCapture()) return;
+
+            // Add back the captured piece
+            capturedPiece = move.CapturedPiece;
+            openingVal -= pieceSquareTable[0][(int)capturedPiece][mirror[to]];
+            endgameVal -= pieceSquareTable[1][(int)capturedPiece][mirror[to]];
+        }
+    }
+
+    public void Update(Move move)
+    {
+        PieceType movingPiece = move.MovingPiece;
+        int colour = PieceUtility.Colour(movingPiece);
+        int to = move.To;
+        int from = move.From;
+        PieceType capturedPiece;
+
+        if (move.GetPromotionType() != null)
+        {
+            if (colour == 0)
+            {
+                // Add the promoting piece
+                openingVal += pieceSquareTable[0][(int)move.GetPromotionType()][to];
+                endgameVal += pieceSquareTable[1][(int)move.GetPromotionType()][to];
+
+                // Remove the promoting pawn
+                openingVal -= pieceSquareTable[0][0][from];
+                endgameVal -= pieceSquareTable[1][0][from];
+
+                if (!move.IsCapture()) return;
+
+                // Remove the captured piece
+                capturedPiece = move.CapturedPiece;
+                openingVal -= pieceSquareTable[0][(int)capturedPiece - 6][to];
+                endgameVal -= pieceSquareTable[1][(int)capturedPiece - 6][to];
+            }
+            else
+            {
+                // Add the promoting piece
+                openingVal -= pieceSquareTable[0][(int)move.GetPromotionType()][mirror[to]];
+                endgameVal -= pieceSquareTable[1][(int)move.GetPromotionType()][mirror[to]];
+
+                // Remove the promoting pawn
+                openingVal += pieceSquareTable[0][0][mirror[from]];
+                endgameVal += pieceSquareTable[1][0][mirror[from]];
+
+                if (!move.IsCapture()) return;
+
+                // Remove the captured piece
+                capturedPiece = move.CapturedPiece;
+                openingVal += pieceSquareTable[0][(int)capturedPiece][mirror[to]];
+                endgameVal += pieceSquareTable[1][(int)capturedPiece][mirror[to]];
+            }
+
+            return;
         }
 
-        if (board.SquareIsUnderAttackByEnemyPawn(move.To))
+        if (colour == 0)
         {
-            score -= GetOpeningPieceValue(move.MovingPiece);
+            // Add To
+            openingVal += pieceSquareTable[0][(int)movingPiece][to];
+            endgameVal += pieceSquareTable[1][(int)movingPiece][to];
+
+            // Remove from
+            openingVal -= pieceSquareTable[0][(int)movingPiece][from];
+            endgameVal -= pieceSquareTable[1][(int)movingPiece][from];
+
+            if (!move.IsCapture()) return;
+
+            // Remove the captured piece
+            capturedPiece = move.CapturedPiece;
+            openingVal -= pieceSquareTable[0][(int)capturedPiece - 6][to];
+            endgameVal -= pieceSquareTable[1][(int)capturedPiece - 6][to];
         }
-
-        return score;
-    }
-
-    public static int GetOpeningPieceSquareScore(PieceType piece, int square)
-    {
-        return piece switch
+        else
         {
-            PieceType.WP => pieceSquareTable[0][0][square],
-            PieceType.BP => pieceSquareTable[0][0][mirror[square]],
-            PieceType.WN => pieceSquareTable[0][1][square],
-            PieceType.BN => pieceSquareTable[0][1][mirror[square]],
-            PieceType.WB => pieceSquareTable[0][2][square],
-            PieceType.BB => pieceSquareTable[0][2][mirror[square]],
-            PieceType.WR => pieceSquareTable[0][3][square],
-            PieceType.BR => pieceSquareTable[0][3][mirror[square]],
-            PieceType.WQ => pieceSquareTable[0][4][square],
-            PieceType.BQ => pieceSquareTable[0][4][mirror[square]],
-            PieceType.WK => pieceSquareTable[0][5][square],
-            PieceType.BK => pieceSquareTable[0][5][mirror[square]],
-            _ => 0,
-        };
+            // Add to
+            openingVal -= pieceSquareTable[0][(int)movingPiece - 6][mirror[to]];
+            endgameVal -= pieceSquareTable[1][(int)movingPiece - 6][mirror[to]];
+
+            // Remove from
+            openingVal += pieceSquareTable[0][(int)movingPiece - 6][mirror[from]];
+            endgameVal += pieceSquareTable[1][(int)movingPiece - 6][mirror[from]];
+
+            if (!move.IsCapture()) return;
+
+            // Remove the captured piece
+            capturedPiece = move.CapturedPiece;
+            openingVal += pieceSquareTable[0][(int)capturedPiece][mirror[to]];
+            endgameVal += pieceSquareTable[1][(int)capturedPiece][mirror[to]];
+        }
     }
 
-    public static int GetOpeningPieceValue(PieceType piece)
+    public int OpeningValue => openingVal;
+    public int EndgameValue => endgameVal;
+
+    public double TaperedValue(GamePhase gamePhase) 
     {
-        return piece switch
-        {
-            PieceType.WP or PieceType.BP => materialWeights[0][0],
-            PieceType.WN or PieceType.BN => materialWeights[0][1],
-            PieceType.WB or PieceType.BB => materialWeights[0][2],
-            PieceType.WR or PieceType.BR => materialWeights[0][3],
-            PieceType.WQ or PieceType.BQ => materialWeights[0][4],
-            _ => -1,
-        };
+        // Tapered evaluation:
+        return (openingVal * gamePhase.Value + endgameVal * (24 - gamePhase.Value))/24.0;
     }
 
-    public static int GetEndgamePieceValue(PieceType piece)
-    {
-        return piece switch
-        {
-            PieceType.WP or PieceType.BP => materialWeights[1][0],
-            PieceType.WN or PieceType.BN => materialWeights[1][1],
-            PieceType.WB or PieceType.BB => materialWeights[1][2],
-            PieceType.WR or PieceType.BR => materialWeights[1][3],
-            PieceType.WQ or PieceType.BQ => materialWeights[1][4],
-            _ => -1,
-        };
-    }
+
 }

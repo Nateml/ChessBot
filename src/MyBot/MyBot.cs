@@ -32,6 +32,8 @@ public class MyBot : IChessBot
 
     private bool printToConsole = true;
 
+    private EvaluationManager evalManager;
+
     private Stopwatch clock = new Stopwatch();
 
     public MyBot()
@@ -58,6 +60,8 @@ public class MyBot : IChessBot
                 return possibleOpeningMoves[new Random().Next(possibleOpeningMoves.Count)];
             }
         }
+
+        evalManager = new(board);
 
         this.printToConsole = printToConsole;
         exitSearch = false;
@@ -164,8 +168,10 @@ public class MyBot : IChessBot
             Move move = moves[i];
 
             board.MakeMove(move);
+            evalManager.Update(move);
             int score = -Negamax(board, (byte)(depth-1), 1, -beta, -alpha, board.IsWhiteToMove ? 1 : -1);
             board.UnmakeMove();
+            evalManager.Undo();
 
             if (score > bestScore)
             {
@@ -277,6 +283,7 @@ public class MyBot : IChessBot
             Move move = moves[i];
 
             board.MakeMove(move);
+            evalManager.Update(move);
 
             int val;
 
@@ -300,6 +307,7 @@ public class MyBot : IChessBot
             //val = -Negamax(board, depth-1, distanceFromRoot+1, -beta, -alpha, -colour);
 
             board.UnmakeMove();
+            evalManager.Undo();
 
             // Cut node (fail high)
             if (val >= beta) 
@@ -359,9 +367,9 @@ public class MyBot : IChessBot
             if (tdata.Flag == TranspositionData.ExactFlag) return tdata.Eval;
         }
 
-        if ( depth == 0 ) return Evaluation.EvaluateBoard(board) * colour;
+        if ( depth == 0 ) return Evaluation.EvaluateBoard(board, evalManager) * colour;
 
-        int standPat = Evaluation.EvaluateBoard(board) * colour;
+        int standPat = Evaluation.EvaluateBoard(board, evalManager) * colour;
         
         if ( standPat >= beta ) return standPat;
 
@@ -385,8 +393,10 @@ public class MyBot : IChessBot
             }
 
             board.MakeMove(move);
+            evalManager.Update(move);
             int val = -Quiscence(board, depth-1, distanceFromRoot+1, -beta, -alpha, -colour);
             board.UnmakeMove();
+            evalManager.Undo();
 
             if (val >= beta) return val;
 
@@ -407,7 +417,7 @@ public class MyBot : IChessBot
             {
                 (moves[i], moves[startingIndex]) = (moves[startingIndex], moves[i]);
             }
-            else if (Evaluation.EvaluateMove(moves[i], board, killerMoves, distanceFromRoot) > Evaluation.EvaluateMove(moves[startingIndex], board, killerMoves, distanceFromRoot))
+            else if (Evaluation.EvaluateMove(moves[i], board, killerMoves, distanceFromRoot, evalManager.GamePhase) > Evaluation.EvaluateMove(moves[startingIndex], board, killerMoves, distanceFromRoot, evalManager.GamePhase))
             {
                 (moves[i], moves[startingIndex]) = (moves[startingIndex], moves[i]);
             }
@@ -424,7 +434,7 @@ public class MyBot : IChessBot
                 (moves[i], moves[startingIndex]) = (moves[startingIndex], moves[i]);
                 break;
             }
-            else if (Evaluation.EvaluateMove(moves[i], board, killerMoves, 0) > Evaluation.EvaluateMove(moves[startingIndex], board, killerMoves, 0))
+            else if (Evaluation.EvaluateMove(moves[i], board, killerMoves, 0, evalManager.GamePhase) > Evaluation.EvaluateMove(moves[startingIndex], board, killerMoves, 0, evalManager.GamePhase))
             {
                 (moves[i], moves[startingIndex]) = (moves[startingIndex], moves[i]);
             }
