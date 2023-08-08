@@ -850,6 +850,10 @@ public sealed class Board
         return BitboardUtility.IsBitSet(isWhiteToMove ? WhiteAttackBitboard : BlackAttackBitboard, square);
     }
 
+    public ulong BlackPawnAttackBitboard => moveGen.BlackPawnAttackBitboard(bitboards[(int)PieceType.BP]);
+
+    public ulong WhitePawnAttackBitboard => moveGen.WhitePawnAttackBitboard(bitboards[(int)PieceType.WP]);
+
     /// <summary>
     /// How many half moves have there been since a pawn move or capture?
     /// Used to detect draws due to the 50-move rule.

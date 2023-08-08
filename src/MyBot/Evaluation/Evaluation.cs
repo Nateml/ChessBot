@@ -10,6 +10,8 @@ public static class Evaluation
 
     public const double PositionalWeight = 0.4;
     public const int KingInCheckPenalty = 60;
+    public const int BishopPairBonus = 60;
+    //public const int KnightMobilityWeight = 5;
 
     /// <summary>
     /// Returns a static evaluation of the board.
@@ -27,7 +29,12 @@ public static class Evaluation
         int openingPositionalScore = 0;
         int endgamePositionalScore = 0;
 
+        //int knightMobility = 0;
+
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.WN), (knightIndex) => {
+            // Calculate knight mobility
+            //knightMobility += BitboardUtility.CountSetBits(MoveGenData.knightTargets[knightIndex] & ~(board.WhitePiecesBitboard | board.BlackPawnAttackBitboard));
+
             // Penalty for having a minor piece on an undefended square
             if (!BitboardUtility.IsBitSet(board.WhiteAttackBitboard, knightIndex))
             {
@@ -37,6 +44,9 @@ public static class Evaluation
         });
 
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.BN), (knightIndex) => {
+            // Calculate knight mobility
+            //knightMobility -= BitboardUtility.CountSetBits(MoveGenData.knightTargets[knightIndex] & ~(board.BlackPiecesBitboard | board.WhitePawnAttackBitboard));
+
             if (!BitboardUtility.IsBitSet(board.BlackAttackBitboard, knightIndex))
             {
                 openingPositionalScore += GetOpeningPieceValue(PieceType.BN);
@@ -44,7 +54,9 @@ public static class Evaluation
             }
         });
 
+        int whiteBishopCount = 0;
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.WB), (bishopIndex) => {
+            whiteBishopCount++;
             if (!BitboardUtility.IsBitSet(board.WhiteAttackBitboard, bishopIndex))
             {
                 openingPositionalScore -= GetOpeningPieceValue(PieceType.WB);
@@ -52,7 +64,9 @@ public static class Evaluation
             }
         });
 
+        int blackBishopCount = 0;
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.BB), (bishopIndex) => {
+            blackBishopCount++;
             if (!BitboardUtility.IsBitSet(board.BlackAttackBitboard, bishopIndex))
             {
                 openingPositionalScore += GetOpeningPieceValue(PieceType.BB);
@@ -63,6 +77,11 @@ public static class Evaluation
         int eval = (int)(evalManager.MaterialScore + PositionalWeight * evalManager.PieceSquareScore);
 
         eval += (int)(PositionalWeight * (openingPositionalScore * evalManager.GamePhase + endgamePositionalScore * (24-evalManager.GamePhase)) / 24.0);
+
+        if (whiteBishopCount >= 2) eval += BishopPairBonus;
+        if (blackBishopCount >= 2) eval -= BishopPairBonus;
+
+        //eval += KnightMobilityWeight * knightMobility;
 
         // Penalty for being in check:
         if (board.IsKingInCheck(true))

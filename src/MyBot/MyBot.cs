@@ -99,29 +99,10 @@ public class MyBot : IChessBot
                 continue;
             }
 
-            // Check if eval was outside the aspiration window
-            if (bestScore <= alpha)
-            {
-                retryMultiplier += 1;
-                alpha -= 150 * retryMultiplier;
-                beta += 50;
-                continue;
-            }
-            if (bestScore >= beta)
-            {
-                retryMultiplier += 1;
-                beta += 150 * retryMultiplier;
-                alpha -= 50;
-                continue;
-            }
-
-            // Only updating the "priority move" here, because I don't want to update it with a move that had a score outside of the aspiration window
-            priorityMove = newMove;
-
             if (printToConsole)
             {
                 Console.Write("info depth " + distance + " nodes " + nodesReached + " score cp " + bestScore + " nps " + ((int) (nodesReached / (stopwatch.ElapsedMilliseconds / 1000.0))) + " pv " );
-                List<Move> pv = ExtractPV(board, priorityMove, distance);
+                List<Move> pv = ExtractPV(board, newMove, distance);
                 foreach (Move pvMove in pv)
                 {
                    Console.Write(pvMove.ToString() + " ");
@@ -129,7 +110,27 @@ public class MyBot : IChessBot
                 Console.WriteLine();
             }
 
-            //retryMultiplier = 0;
+            // Check if eval was outside the aspiration window
+            if (bestScore <= alpha)
+            {
+                retryMultiplier += 1;
+                alpha -= 150 * retryMultiplier;
+                beta += 20;
+                continue;
+            }
+            if (bestScore >= beta)
+            {
+                retryMultiplier += 1;
+                beta += 150 * retryMultiplier;
+                alpha -= 20;
+                continue;
+            }
+
+            // Only updating the "priority move" here, because I don't want to update it with a move that had a score outside of the aspiration window
+            priorityMove = newMove;
+
+
+            retryMultiplier = 0;
 
             // Adjust the aspiration window
             alpha = bestScore - 30;
