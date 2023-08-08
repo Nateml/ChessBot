@@ -6,8 +6,9 @@ using ChessBot;
 public static class Evaluation
 {
 
-    public const double PositionalWeight = 0.25;
+    public const double PositionalWeight = 0.40;
     public const int KingInCheckPenalty = 60;
+    public const int BishopPairBonus = 60;
 
     /// <summary>
     /// Values for the different piece types.
@@ -234,6 +235,9 @@ public static class Evaluation
         int endgamePositionalScore = 0;
         int endgameMaterialScore = 0;
 
+        int whiteBishopCount = 0;
+        int blackBishopCount = 0;
+
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.WP), (pawnIndex) => {
             openingMaterialScore += materialWeights[0][0];
             openingPositionalScore += pieceSquareTable[0][0][pawnIndex];
@@ -285,6 +289,8 @@ public static class Evaluation
         });
 
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.WB), (bishopIndex) => {
+            whiteBishopCount++;
+
             openingMaterialScore += materialWeights[0][2];
             openingPositionalScore += pieceSquareTable[0][2][bishopIndex];
 
@@ -301,6 +307,8 @@ public static class Evaluation
         });
 
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.BB), (bishopIndex) => {
+            blackBishopCount++;
+
             openingMaterialScore += materialWeights[0][8];
             openingPositionalScore += -pieceSquareTable[0][2][mirror[bishopIndex]];
 
@@ -395,6 +403,9 @@ public static class Evaluation
         {
             eval += KingInCheckPenalty;
         }
+
+        if (whiteBishopCount >= 2) eval += BishopPairBonus;
+        if (blackBishopCount >= 2) eval -= BishopPairBonus;
 
         return eval;
     }
