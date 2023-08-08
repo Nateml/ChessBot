@@ -12,7 +12,7 @@ It's still a work in progress, but I've managed to make significant improvements
     - Iterative deepening.
     - Fail-soft alpha-beta pruning.
     - Simple late move reduction (LMR); all moves after the first ten are searched to depth reduced by 1 ply.
-    - [Quiescence Search](https://www.chessprogramming.org/Quiescence_Search) with [delta pruning](https://www.chessprogramming.org/Delta_Pruning) and a stand-pat score. Currently quiescence is limited to a depth of 4, but I might increase this (and look into pruning using static exchange evaluation) because I have a suspicion that there is some horizon effect at play.
+    - Unlimited [Quiescence Search](https://www.chessprogramming.org/Quiescence_Search) with [delta pruning](https://www.chessprogramming.org/Delta_Pruning) and a stand-pat score.
 - A transposition table.
     - I hate these...
 - Static evaluation function:
@@ -36,7 +36,7 @@ It's still a work in progress, but I've managed to make significant improvements
 ## Playing against it
 
 This bot is available to play against over here https://lichess.org/@/NatesBot .
-The bot on lichess is currently only accepting blitz and rapid games.
+The bot on lichess is currently accepting bullet, blitz and rapid games - and can only play one game at a time.
 
 If you want to play against the bot locally, download the [executable](https://github.com/Nateml/ChessBot/releases) here. I suggest downloading a GUI like [Arena](http://www.playwitharena.de) and loading the engine onto there.
 
