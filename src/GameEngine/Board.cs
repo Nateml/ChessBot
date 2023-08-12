@@ -104,7 +104,7 @@ public sealed class Board
     public void MakeMove(Move move)
     {
 
-        repetitionHistory.Add(zobristHash);
+        //repetitionHistory.Add(zobristHash);
 
         // Push state data to stack before making the move
         stateHistory.Push(new StateData(move, CWK, CWQ, CBK, CBQ, epFile, fullMoveCount, halfMoveCount, zobristHash, numPlySincePawnMoveOrCapture));
@@ -225,35 +225,24 @@ public sealed class Board
         }
         else
         {
-            if (from == 63) {
-                CWK = false;
-                if (prevCWK != CWK)
-                {
-                    newZobristHash ^= Zobrist.zCastle[0];
-                }
-            }
-            else if (from == 56)
+            switch (from)
             {
-                CWQ = false;
-                if (prevCWQ != CWQ)
-                {
-                    newZobristHash ^= Zobrist.zCastle[1];
-                }
-            } 
-            else if (from == 7) {
-                CBK = false;
-                if (prevCBK != CBK)
-                {
-                    newZobristHash ^= Zobrist.zCastle[2];
-                }
-            }
-            else if (from == 0) 
-            {
-                CBQ = false;
-                if (prevCBQ != CBQ)
-                {
-                    newZobristHash ^= Zobrist.zCastle[3];
-                }
+                case 63:
+                    CWK = false;
+                    if (prevCWK != CWK) newZobristHash ^= Zobrist.zCastle[0];
+                    break;
+                case 56:
+                    CWQ = false;
+                    if (prevCWQ != CWQ) newZobristHash ^= Zobrist.zCastle[1];
+                    break;
+                case 7:
+                    CBK = false;
+                    if (prevCBK != CBK) newZobristHash ^= Zobrist.zCastle[2];
+                    break;
+                case 0:
+                    CBQ = false;
+                    if (prevCBQ != CBQ) newZobristHash ^= Zobrist.zCastle[3];
+                    break;
             }
         } 
 
@@ -271,46 +260,30 @@ public sealed class Board
                 newZobristHash ^= Zobrist.zArray[(int)capturedPiece][to];
             }
 
-            if (to == 63) 
+            switch (to)
             {
-                CWK = false;
-                if (prevCWK != CWK)
-                {
-                    newZobristHash ^= Zobrist.zCastle[0];
-                }
+                case 63:
+                    CWK = false;
+                    if (prevCWK != CWK) newZobristHash ^= Zobrist.zCastle[0];
+                    break;
+                case 56:
+                    CWQ = false;
+                    if (prevCWQ != CWQ) newZobristHash ^= Zobrist.zCastle[1];
+                    break;
+                case 7:
+                    CBK = false;
+                    if (prevCBK != CBK) newZobristHash ^= Zobrist.zCastle[2];
+                    break;
+                case 0:
+                    CBQ = false;
+                    if (prevCBQ != CBQ) newZobristHash ^= Zobrist.zCastle[3];
+                    break;
             }
-            else if (to == 56) 
-            {
-                CWQ = false;
-                if (prevCWQ != CWQ)
-                {
-                    newZobristHash ^= Zobrist.zCastle[1];
-                }
-            }
-            else if (to == 7) 
-            {
-                CBK = false;
-                if (prevCBK != CBK)
-                {
-                    newZobristHash ^= Zobrist.zCastle[2];
-                }
-            }
-            else if (to == 0)
-            {
-                CBQ = false;
-                if (prevCBQ != CBQ)
-                {
-                    newZobristHash ^= Zobrist.zCastle[3];
-                }
-            } 
         }
         else if (movingPiece == PieceType.WP || movingPiece == PieceType.BP)
         {
             numPlySincePawnMoveOrCapture = 0;
-            if (move.IsDoublePawnPush())
-            {
-                epFile = MoveGenData.FileMasks[to % 8];
-            }
+            if (move.IsDoublePawnPush()) epFile = MoveGenData.FileMasks[to % 8]; // Record the EP file
         }
         else if (move.IsKingsideCastle())
         {
@@ -367,7 +340,7 @@ public sealed class Board
 
     public void UnmakeMove()
     {
-        repetitionHistory.Remove(zobristHash);
+        //repetitionHistory.Remove(zobristHash);
 
         StateData previousState = stateHistory.Pop();
         Move move = previousState.lastMove;

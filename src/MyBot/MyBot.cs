@@ -149,7 +149,6 @@ public class MyBot : IChessBot
         nodesReached = 0;
         transpositions = 0;
 
-
         Move[] moves = board.GetLegalMoves();
 
         if (moves.Length == 0) throw new Exception("No legal moves to make.");
