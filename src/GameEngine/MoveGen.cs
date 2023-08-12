@@ -921,11 +921,11 @@ public class MoveGen : IBoardListener
 
     public void OnBoardStateChange()
     {
-        legalMoves = new();
+        legalMoves.Clear();
         hasCachedLegalMoves = false;
-        pinnedPieces = new();
+        pinnedPieces = 0ul;
         hasCachedPinnedPieces = false;
-        discoveredChecks = new();
+        discoveredChecks = 0ul;
         hasCachedDiscoveredChecks = false;
         whitePawnAttackBitboard = 0ul;
         hasCachedWhitePawnAttackBitboard = false;
