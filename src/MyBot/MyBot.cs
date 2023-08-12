@@ -265,6 +265,7 @@ public class MyBot : IChessBot
             return Quiscence(board, QuiscenceDepth, distanceFromRoot+1, alpha, beta, colour);
         }
 
+
         Move[] moves = board.GetLegalMoves();
 
         if (moves.Length == 0)
@@ -275,6 +276,8 @@ public class MyBot : IChessBot
             }
             return 0;
         }
+
+        //MoveScores cachedMoveScores = new();
 
         int bestScore = -1000001;
         for (int i = 0; i < moves.Length; i++)
@@ -380,6 +383,8 @@ public class MyBot : IChessBot
 
         alpha = Math.Max(alpha, standPat);
 
+        //MoveScores cachedMoveScores = new();
+
         Move[] moves = board.GetLegalMoves(true);
         for (int i = 0; i < moves.Length; i++)
         {
@@ -408,24 +413,70 @@ public class MyBot : IChessBot
         return standPat;
     }
 
-    private void PickMove(Move[] moves, int startingIndex, Board board, int distanceFromRoot, Move? bestMove = null)
+    private void PickMove(Move[] moves, int startingIndex, Board board, int distanceFromRoot, MoveScores cachedMoveScores, Move? bestMove = null)
     {
+        // We can calculate the score of the first move once before running the loop
+        int startingMoveScore = Evaluation.EvaluateMove(moves[startingIndex], board, killerMoves, distanceFromRoot, evalManager.GamePhase);
+
         for (int i = startingIndex+1; i < moves.Length; i++)
         {
+            int currentMoveScore;
+
+            // Check if we have already calculated and stored the score of the move we are currently checking
+            (int cachedScore, bool hasCachedScore) = cachedMoveScores.Get(moves[i]);
+            if (hasCachedScore) currentMoveScore = cachedScore; // Use the cached score if its available
+            else 
+            {
+                currentMoveScore = Evaluation.EvaluateMove(moves[i], board, killerMoves, distanceFromRoot, evalManager.GamePhase);
+                cachedMoveScores.Put(moves[i], currentMoveScore); // Cache the score
+            }
+
             // For performance improvements, I'm only checking if this move == best move once during the first call
             if (startingIndex == 0 && bestMove != null && moves[i].Equals(bestMove))
             {
                 (moves[i], moves[startingIndex]) = (moves[startingIndex], moves[i]);
+                return; // We have already performed the "best swap", so we can return early
             }
-            else if (Evaluation.EvaluateMove(moves[i], board, killerMoves, distanceFromRoot, evalManager.GamePhase) > Evaluation.EvaluateMove(moves[startingIndex], board, killerMoves, distanceFromRoot, evalManager.GamePhase))
+            else if (currentMoveScore > startingMoveScore)
             {
                 (moves[i], moves[startingIndex]) = (moves[startingIndex], moves[i]);
+                startingMoveScore = currentMoveScore;
+            }
+        }
+    }
+    private void PickMove(Move[] moves, int startingIndex, Board board, int distanceFromRoot, Move? bestMove = null)
+    {
+        //int scoreAtStartingIndex = Evaluation.EvaluateMove(moves[startingIndex], board, killerMoves, distanceFromRoot, evalManager.GamePhase);
+        int scoreAtStartingIndex = moves[startingIndex].GetScore(board, killerMoves, distanceFromRoot, evalManager.GamePhase);
+        for (int i = startingIndex+1; i < moves.Length; i++)
+        {
+            // For performance improvements, I'm only checking if this move == best move once during the first call
+            if (startingIndex == 0 && bestMove != null)
+            {
+                if (moves[i].Equals(bestMove))
+                {
+                    (moves[i], moves[startingIndex]) = (moves[startingIndex], moves[i]);
+                    return; // We have found the "best swap", so we can return early
+                }
+                continue;
+            }
+            else 
+            {
+                //int scoreAtCurrentMove = Evaluation.EvaluateMove(moves[i], board, killerMoves, distanceFromRoot, evalManager.GamePhase);
+                int scoreAtCurrentMove = moves[i].GetScore(board, killerMoves, distanceFromRoot, evalManager.GamePhase);
+
+                if (scoreAtCurrentMove > scoreAtStartingIndex)
+                {
+                    (moves[i], moves[startingIndex]) = (moves[startingIndex], moves[i]);
+                    scoreAtStartingIndex = scoreAtCurrentMove;
+                }
             }
         }
     }
 
     private void PickMoveRoot(Move[] moves, int startingIndex, Board board)
     {
+        int scoreAtStartingIndex = Evaluation.EvaluateMove(moves[startingIndex], board, killerMoves, 0, evalManager.GamePhase);
         for (int i = startingIndex+1; i < moves.Length; i++)
         {
             if (moves[i].Equals(priorityMove))
@@ -434,9 +485,14 @@ public class MyBot : IChessBot
                 (moves[i], moves[startingIndex]) = (moves[startingIndex], moves[i]);
                 break;
             }
-            else if (Evaluation.EvaluateMove(moves[i], board, killerMoves, 0, evalManager.GamePhase) > Evaluation.EvaluateMove(moves[startingIndex], board, killerMoves, 0, evalManager.GamePhase))
+            else 
             {
-                (moves[i], moves[startingIndex]) = (moves[startingIndex], moves[i]);
+                int scoreAtCurrentMove = Evaluation.EvaluateMove(moves[i], board, killerMoves, 0, evalManager.GamePhase);
+                if (scoreAtCurrentMove > scoreAtStartingIndex)
+                {
+                    (moves[i], moves[startingIndex]) = (moves[startingIndex], moves[i]);
+                    scoreAtStartingIndex = scoreAtCurrentMove;
+                }
             }
         }
     }

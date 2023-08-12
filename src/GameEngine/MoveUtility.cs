@@ -86,6 +86,7 @@ public static class MoveUtility
             if (((1ul << to) & board.EpFile) != 0 && ((1ul << from) & MoveGenData.RankMasks[4]) != 0)
             {
                 flag = Move.EpCaptureFlag;
+                capturedPiece = BP;
             }
         }
         else if (movingPiece == BP)
@@ -94,6 +95,7 @@ public static class MoveUtility
             if (((1ul << to) & board.EpFile) != 0 && ((1ul << from) & MoveGenData.RankMasks[3]) != 0)
             {
                 flag = Move.EpCaptureFlag;
+                capturedPiece = WP;
             }
         }
 

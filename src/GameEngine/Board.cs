@@ -11,6 +11,8 @@ public sealed class Board
 
     private ulong[] bitboards = new ulong[13];
 
+    private ulong allPiecesBitboard = 0ul;
+
     private HashSet<ulong> repetitionHistory = new();
 
     private int numPlySincePawnMoveOrCapture = 0;
@@ -81,6 +83,8 @@ public sealed class Board
         bitboards[(int)PieceType.BR] = fenParser.BR;
         bitboards[(int)PieceType.BQ] = fenParser.BQ;
         bitboards[(int)PieceType.BK] = fenParser.BK;
+
+        allPiecesBitboard = BitboardUtility.BitwiseOverArray(bitboards, bitboards.Length-1, (b1, b2) => b1 | b2);
 
         epFile = fenParser.epFile;
 
@@ -164,11 +168,13 @@ public sealed class Board
         bitboards[(int)movingPiece] ^= fromBitboard;
         newZobristHash ^= Zobrist.zArray[(int)movingPiece][from];
 
+        allPiecesBitboard ^= fromBitboard;
+        allPiecesBitboard |= toBitboard;
+
         if (!move.IsPromotion())
         {
             bitboards[(int)movingPiece] ^= toBitboard;
             newZobristHash ^= Zobrist.zArray[(int)movingPiece][to];
-
         }
         else
         {
@@ -252,6 +258,7 @@ public sealed class Board
             if (move.IsEnPassant())
             {
                 bitboards[(int)capturedPiece] ^= isWhiteToMove ? toBitboard << 8 : toBitboard >> 8;
+                allPiecesBitboard ^= isWhiteToMove ? toBitboard << 8 : toBitboard >> 8;
                 newZobristHash ^= Zobrist.zArray[(int)capturedPiece][isWhiteToMove ? to + 8 : to - 8];
             }
             else
@@ -291,12 +298,14 @@ public sealed class Board
             if (white)
             {
                 bitboards[(int)PieceType.WR] ^= 0b101ul << 61;
+                allPiecesBitboard ^= 0b101ul << 61;
                 CWK = false;
                 newZobristHash ^= Zobrist.zCastle[0];
             }
             else
             {
                 bitboards[(int)PieceType.BR] ^= 0b10100000ul;
+                allPiecesBitboard ^= 0b10100000ul;
                 CBK = false;
                 newZobristHash ^= Zobrist.zCastle[2];
             }
@@ -307,12 +316,14 @@ public sealed class Board
             if (white)
             {
                 bitboards[(int)PieceType.WR] ^= 0b1001ul << 56;
+                allPiecesBitboard ^= 0b1001ul << 56;
                 CWQ = false;
                 newZobristHash ^= Zobrist.zCastle[1];
             }
             else
             {
                 bitboards[(int)PieceType.BR] ^= 0b1001ul;
+                allPiecesBitboard ^= 0b1001ul;
                 CBQ = false;
                 newZobristHash ^= Zobrist.zCastle[3];
             }
@@ -348,6 +359,8 @@ public sealed class Board
         ulong fromBitboard = 1ul << move.From;
         ulong toBitboard = 1ul << move.To;
 
+        allPiecesBitboard ^= fromBitboard | toBitboard;
+
         // update the moving pieces bitboard
         bitboards[(int)move.MovingPiece]^= (toBitboard & bitboards[(int)move.MovingPiece]) | fromBitboard;
 
@@ -376,10 +389,12 @@ public sealed class Board
             if (move.IsEnPassant())
             {
                 bitboards[(int)move.CapturedPiece] ^= isWhiteToMove ? toBitboard >> 8 : toBitboard << 8;
+                allPiecesBitboard ^= isWhiteToMove ? toBitboard >> 8 : toBitboard << 8;
             }
             else
             {
                 bitboards[(int)move.CapturedPiece] ^= toBitboard;
+                allPiecesBitboard ^= toBitboard;
             }
         }
         else if (move.IsKingsideCastle())
@@ -388,10 +403,12 @@ public sealed class Board
             if (isWhiteToMove)
             {
                 bitboards[(int)PieceType.BR] ^= 0b10100000ul;
+                allPiecesBitboard ^= 0b10100000ul;
             }
             else
             {
                 bitboards[(int)PieceType.WR] ^= 0b101ul << 61;
+                allPiecesBitboard ^= 0b101ul << 61;
             }
         }
         else if (move.IsQueensideCastle())
@@ -400,10 +417,12 @@ public sealed class Board
             if (isWhiteToMove)
             {
                 bitboards[(int)PieceType.BR] ^= 0b1001ul;
+                allPiecesBitboard ^= 0b1001ul;
             }
             else
             {
                 bitboards[(int)PieceType.WR] ^= 0b1001ul << 56;
+                allPiecesBitboard ^= 0b1001ul << 56;
             }
         }
 
@@ -509,7 +528,8 @@ public sealed class Board
     {
         get
         {
-            return BitboardUtility.BitwiseOverArray(bitboards, bitboards.Length-1, (b1, b2) => b1 | b2);
+            //return BitboardUtility.BitwiseOverArray(bitboards, bitboards.Length-1, (b1, b2) => b1 | b2);
+            return allPiecesBitboard;
         }
     }
 

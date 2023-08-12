@@ -23,6 +23,9 @@ public class Move
 
     private readonly int encodedMove = 0;
 
+    private int score = 0;
+    private bool hasCachedScore = false;
+
     public Move(int from, int to, PieceType movingPiece, PieceType capturePiece, int flag)
     {
         encodedMove |= ((flag & 0xf) << 20) | (((int)capturePiece & 0xf) << 16) | (((int)movingPiece & 0xf) << 12) | ((from & 0x3f) << 6) | (to & 0x3f);
@@ -225,5 +228,15 @@ public class Move
         }
 
         return output;
+    }
+
+    public int GetScore(Board board, KillerMoves killerMoves, int distanceFromRoot, int gamePhase)
+    {
+        if (hasCachedScore) return score;
+
+        score = Evaluation.EvaluateMove(this, board, killerMoves, distanceFromRoot, gamePhase);
+        hasCachedScore = true;
+
+        return score;
     }
 }

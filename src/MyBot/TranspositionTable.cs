@@ -54,9 +54,10 @@ public class TranspositionTable
     public TranspositionData? Get(Board board)
     {
         int index = (int) (board.ZobristHash % (ulong)size);
-        if (table[index] != null && table[index].ZobristHash == board.ZobristHash)
+        TranspositionData? entry = table[index];
+        if (entry != null && entry.ZobristHash == board.ZobristHash)
         {
-            return table[index];
+            return entry;
         }
         else
         {
