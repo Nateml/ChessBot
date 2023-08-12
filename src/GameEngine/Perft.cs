@@ -51,7 +51,7 @@ static class Perft
         }
 
         stopwatch.Stop();
-        //Console.WriteLine("That took: " + stopwatch.Elapsed.Milliseconds);
+        Console.WriteLine("That took: " + stopwatch.Elapsed.TotalMilliseconds);
 
         return nodes;
     }

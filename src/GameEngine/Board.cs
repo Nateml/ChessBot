@@ -808,6 +808,22 @@ public sealed class Board
         return kingAttackers;
     }
 
+    public PieceType GetPieceType(ulong positionBitboard)
+    {
+        if ((bitboards[0] & positionBitboard) != 0) return PieceType.WP;
+        else if ((bitboards[6] & positionBitboard) != 0) return PieceType.BP;
+        else if ((bitboards[1] & positionBitboard) != 0) return PieceType.WN;
+        else if ((bitboards[2] & positionBitboard) != 0) return PieceType.WB;
+        else if ((bitboards[3] & positionBitboard) != 0) return PieceType.WR;
+        else if ((bitboards[7] & positionBitboard) != 0) return PieceType.BN;
+        else if ((bitboards[8] & positionBitboard) != 0) return PieceType.BB;
+        else if ((bitboards[9] & positionBitboard) != 0) return PieceType.BR;
+        else if ((bitboards[4] & positionBitboard) != 0) return PieceType.WQ;
+        else if ((bitboards[10] & positionBitboard) != 0) return PieceType.BQ;
+        else if ((bitboards[5] & positionBitboard) != 0) return PieceType.WK;
+        else if ((bitboards[11] & positionBitboard) != 0) return PieceType.BK;
+        else return PieceType.EMPTY;
+    }
 
     /// <summary>
     /// Returns the type of piece on the tile at the given index.
@@ -815,6 +831,9 @@ public sealed class Board
     public PieceType GetPieceType(int index)
     {
         ulong positionBitboard = 1ul << index;
+        return GetPieceType(positionBitboard);
+
+        /*
         for (int i = 0; ; i++)
         {
             try
@@ -833,6 +852,7 @@ public sealed class Board
                 Environment.Exit(0);
             }
         }
+        */
     }
 
     public bool SquareIsUnderAttackByEnemyPawn(int square)

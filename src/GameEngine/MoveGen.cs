@@ -600,7 +600,7 @@ public class MoveGen : IBoardListener
 
                     if ((targetsLSB & enemyPieces) != 0) flag = Move.CaptureFlag;
 
-                    Move move = new(startingIndex, targetIndex, white ? PieceType.WQ : PieceType.BQ, board.GetPieceType(targetIndex), flag);
+                    Move move = new(startingIndex, targetIndex, white ? PieceType.WQ : PieceType.BQ, board.GetPieceType(targetsLSB), flag);
                     if (!unsafeMove) moves.Add(move);
                     else
                     {
