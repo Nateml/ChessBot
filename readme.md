@@ -8,8 +8,9 @@ It's still a work in progress, but I've managed to make significant improvements
 - UCI communication.
 - Move generation using bitboards.
     - Magic bitboards for sliding pieces.
-- Negamax with alpha-beta pruning DFS.
+- Negamax with AB pruning.
     - Iterative deepening.
+    - Aspiration window with gradual widening
     - Fail-soft alpha-beta pruning.
     - Simple late move reduction (LMR); all moves after the first ten are searched to depth reduced by 1 ply.
     - Unlimited [Quiescence Search](https://www.chessprogramming.org/Quiescence_Search) with [delta pruning](https://www.chessprogramming.org/Delta_Pruning) and a stand-pat score.
