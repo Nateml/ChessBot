@@ -60,9 +60,32 @@ public sealed class Board
         bitboards[12] = ulong.MaxValue; // sentinal value
         moveGen = new MoveGen(this);
         listeners = new();
+        AttachListener(moveGen);
         halfMoveCount = 0;
         fullMoveCount = 0;
         LoadPositionFromFen(fen);
+    }
+
+    public Board(Board b)
+    {
+        bitboards = new ulong[13];
+        for (int i = 0; i < 13; i++)
+        {
+            bitboards[i] = b.bitboards[i];
+        }
+        allPiecesBitboard = b.allPiecesBitboard;
+        epFile = b.epFile;
+        CWK = b.CWK;
+        CWQ = b.CWQ;
+        CBK = b.CBK;
+        CBQ = b.CBQ;
+        isWhiteToMove = b.isWhiteToMove;
+        zobristHash = b.zobristHash;
+        halfMoveCount = b.halfMoveCount;
+        fullMoveCount = b.fullMoveCount;
+        moveGen = new MoveGen(this);
+        listeners = new();
+        AttachListener(moveGen);
     }
 
     /// <summary>
@@ -876,6 +899,11 @@ public sealed class Board
     public void AttachListener(IBoardListener listener)
     {
         listeners.Add(listener);
+    }
+
+    public Board Clone()
+    {
+        return new Board(this);
     }
 
     public int NumPlyPlayed => stateHistory.Count;

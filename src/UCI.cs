@@ -3,17 +3,18 @@ namespace ChessBot;
 class UCI
 {
 
-    public const string EngineName = "Nate's C# ChessBot";
+    public const string EngineName = "Nate's C# MCTS ChessBot";
 
     private static Board board = new();
-    private static IChessBot bot = new MyBot();
-    private static EvaluationManager evalManager = new(board);
+    private static IChessBot bot = new MCTSBot();
+
+    //private static EvaluationManager evalManager = new(board);
 
     private static bool hasStopBeenRequested = false;
 
     public static void Main(string[] args)
     {
-        board.AttachListener(board.moveGen);
+        //board.AttachListener(board.moveGen);
         Console.WriteLine("Welcome to Nate's ChessBot.");
         Console.WriteLine("This program uses the UCI protocol.");
 
@@ -74,11 +75,11 @@ class UCI
 
     static void InputEvalStatic()
     {
-        Console.WriteLine(evalManager.GamePhase);
-        Console.WriteLine(evalManager.MaterialScore);
-        Console.WriteLine(evalManager.PieceSquareScore);
-        int eval = Evaluation.EvaluateBoard(board, evalManager);
-        Console.WriteLine(eval);
+        //Console.WriteLine(evalManager.GamePhase);
+        //Console.WriteLine(evalManager.MaterialScore);
+        //Console.WriteLine(evalManager.PieceSquareScore);
+        //int eval = Evaluation.EvaluateBoard(board, evalManager);
+        //Console.WriteLine(eval);
     }
 
     static void InputRapidEngineTest()
@@ -123,7 +124,7 @@ class UCI
     static void InputUndoMove()
     {
         board.UnmakeMove();
-        evalManager.Undo();
+        //evalManager.Undo();
     }
 
     static void InputIsReady()
@@ -157,8 +158,8 @@ class UCI
         }
 
         board = new(fen);
-        evalManager = new(board);
-        board.AttachListener(board.moveGen);
+        //evalManager = new(board);
+        //board.AttachListener(board.moveGen);
 
         // TODO: Add logic for making moves from input string
         if (input.Contains("moves"))
@@ -171,7 +172,7 @@ class UCI
                 {
                     Move move = MoveUtility.ConvertFromAlgebraic(algebraicMove, board);
                     board.MakeMove(move);
-                    evalManager.Update(move);
+                    //evalManager.Update(move);
                 }
             }
         }
