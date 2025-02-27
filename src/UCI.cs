@@ -53,7 +53,7 @@ class UCI
             if (input == "test perft") InputTestPerft();
             if (input == "transposition table stats") InputTranspositionTableStats();
             if (input == "rapid engine test") InputRapidEngineTest();
-            if (input == "zobrist test") InputZobristTest();
+            if (input.StartsWith("zobrist test")) InputZobristTest(input);
             if (input == "eval static") InputEvalStatic();
             if (input == "undo move") InputUndoMove();
             if (input == "quit") InputQuit();
@@ -67,9 +67,22 @@ class UCI
         Console.WriteLine("uciok");
     }
 
-    static void InputZobristTest()
+    static void InputZobristTest(String input)
     {
-        ZobristTest.Test();
+        // Extract depth from input
+        int depth;
+
+        try
+        {
+            depth = int.Parse(input.Split(" ")[2]);
+        }
+        catch (Exception ex) when (ex is ArgumentNullException || ex is FormatException || ex is IndexOutOfRangeException)
+        {
+            Console.WriteLine("Invalid input. Please enter a depth after 'zobrist test'.");
+            return;
+        }
+
+        ZobristTest.Test(depth);
     }
 
     static void InputEvalStatic()
