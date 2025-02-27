@@ -83,7 +83,7 @@ public static class MoveUtility
         else if (movingPiece == WP)
         {
             // Is a white pawn landing on the EP file? And is this pawn moving from rank 5?
-            if (((1ul << to) & board.EpFile) != 0 && ((1ul << from) & MoveGenData.RankMasks[4]) != 0)
+            if (((1ul << to) & MoveGenData.FileMasks[board.EpFile]) != 0 && ((1ul << from) & MoveGenData.RankMasks[4]) != 0)
             {
                 flag = Move.EpCaptureFlag;
                 capturedPiece = BP;
@@ -92,7 +92,7 @@ public static class MoveUtility
         else if (movingPiece == BP)
         {
             // Is a black pawn landing on the EP file? And is this pawn moving from rank 4?
-            if (((1ul << to) & board.EpFile) != 0 && ((1ul << from) & MoveGenData.RankMasks[3]) != 0)
+            if (((1ul << to) & MoveGenData.FileMasks[board.EpFile]) != 0 && ((1ul << from) & MoveGenData.RankMasks[3]) != 0)
             {
                 flag = Move.EpCaptureFlag;
                 capturedPiece = WP;

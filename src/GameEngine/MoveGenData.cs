@@ -53,7 +53,8 @@ static class MoveGenData
     public static readonly ulong[] FileMasks = 
     {
         0x101010101010101ul, 0x202020202020202ul, 0x404040404040404ul, 0x808080808080808ul,
-        0x1010101010101010ul, 0x2020202020202020ul, 0x4040404040404040ul, 0x8080808080808080ul
+        0x1010101010101010ul, 0x2020202020202020ul, 0x4040404040404040ul, 0x8080808080808080ul,
+        0ul // dummy value for representing invalid file
     };
 
     /// <summary>

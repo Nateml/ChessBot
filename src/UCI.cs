@@ -13,7 +13,7 @@ class UCI
 
     public static void Main(string[] args)
     {
-        board.AttachListener(board.moveGen);
+        // board.AttachListener(board.moveGen); // This shouldn't be necessary anymore, it is being done in the moveGen constructor
         Console.WriteLine("Welcome to Nate's ChessBot.");
         Console.WriteLine("This program uses the UCI protocol.");
 
@@ -53,6 +53,7 @@ class UCI
             if (input == "test perft") InputTestPerft();
             if (input == "transposition table stats") InputTranspositionTableStats();
             if (input == "rapid engine test") InputRapidEngineTest();
+            if (input.StartsWith("speed test")) InputSpeedTest(input);
             if (input.StartsWith("zobrist test")) InputZobristTest(input);
             if (input == "eval static") InputEvalStatic();
             if (input == "undo move") InputUndoMove();
@@ -65,6 +66,23 @@ class UCI
         Console.WriteLine("id name " + EngineName);
         Console.WriteLine("id author Nathan Macdonald");
         Console.WriteLine("uciok");
+    }
+
+    static void InputSpeedTest(String input)
+    {
+        int time;
+
+        try
+        {
+            time = int.Parse(input.Split(" ")[2]);
+        }
+        catch (Exception ex) when (ex is ArgumentNullException || ex is FormatException || ex is IndexOutOfRangeException)
+        {
+            Console.WriteLine("Invalid input. Please enter a time (ms) after 'speed test'.");
+            return;
+        }
+
+        SpeedTest.Test(bot, time);
     }
 
     static void InputZobristTest(String input)
