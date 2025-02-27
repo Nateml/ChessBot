@@ -36,7 +36,7 @@ It's still a work in progress, but I've managed to make significant improvements
 
 ## Playing against it
 
-This bot is available to play against over here https://lichess.org/@/NatesBot .
+~~This bot is available to play against over here https://lichess.org/@/NatesBot.~~ (I've taken it down from lichess for the meantime)
 The bot on lichess is currently accepting bullet, blitz and rapid games - and can only play one game at a time.
 
 If you want to play against the bot locally, download the [executable](https://github.com/Nateml/ChessBot/releases) here. I suggest downloading a GUI like [Arena](http://www.playwitharena.de) and loading the engine onto there.
