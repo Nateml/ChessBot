@@ -22,6 +22,7 @@ public class MoveGen : IBoardListener
     public MoveGen(Board board)
     {
         this.board = board;
+        board.AttachListener(this);
 
         legalMoves = new();
         hasCachedLegalMoves = false;
@@ -199,6 +200,17 @@ public class MoveGen : IBoardListener
 
     public List<Move>  GenerateBlackPawnMoves(List<Move> moves, ulong pawnBitboard, ulong friendlyPieces, ulong enemyPieces, ulong epFile, bool capturesOnly = false, bool checksOnly = false)
     {
+        // I need to convert epFile from an int (index of file) to a ulong (mask)
+        // This is because I changed it to an int in the board class to make things easier over there
+        if (epFile < 8)
+        {
+            epFile = MoveGenData.FileMasks[epFile];
+        }
+        else 
+        {
+            epFile = 0ul;
+        }
+
         bool unsafeMove;
 
         ulong kingAttackers = board.GetKingAttackers(board.IsWhiteToMove);
@@ -382,6 +394,15 @@ public class MoveGen : IBoardListener
 
     public List<Move> GenerateWhitePawnMoves(List<Move> moves, ulong pawnBitboard, ulong friendlyPieces, ulong enemyPieces, ulong epFile, bool capturesOnly = false)
     {
+        if (epFile < 8)
+        {
+            epFile = MoveGenData.FileMasks[epFile];
+        }
+        else
+        {
+            epFile = 0ul;
+        }
+
         bool unsafeMove;
 
         ulong kingAttackers = board.GetKingAttackers(board.IsWhiteToMove);

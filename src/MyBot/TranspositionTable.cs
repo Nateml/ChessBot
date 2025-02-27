@@ -6,21 +6,31 @@ using ChessBot;
 
 public class TranspositionTable
 {
-    int size;
+
+    // Make size a power of 2 using bit shifting
+    private int size;
 
     TranspositionData[] table;
 
     public int collisions = 0;
 
-    public TranspositionTable(int size)
+    public TranspositionTable(int size = 1 << 20)
     {
+        // Make sure size is a power of 2
+        if ((size & (size - 1)) != 0)
+        {
+            throw new InvalidEnumArgumentException("Transposition table size must be a power of 2.");
+        }
+
         this.size = size;
         table = new TranspositionData[size];
     }
 
     public void Put(Board board, byte depth, byte flag, int eval, Move? bestMove)
     {
-        int index = (int) (board.ZobristHash % (ulong)size);
+        // int index = (int) (board.ZobristHash % (ulong)size);
+        int index = TableIndex(board.ZobristHash);
+
         if (table[index] == null)
         {
             // Insert into index
@@ -53,7 +63,8 @@ public class TranspositionTable
 
     public TranspositionData? Get(Board board)
     {
-        int index = (int) (board.ZobristHash % (ulong)size);
+        // int index = (int) (board.ZobristHash % (ulong)size);
+        int index = TableIndex(board.ZobristHash);
         TranspositionData? entry = table[index];
         if (entry != null && entry.ZobristHash == board.ZobristHash)
         {
@@ -77,6 +88,7 @@ public class TranspositionTable
     public void Clear()
     {
         table = new TranspositionData[size];
+        collisions = 0;
     }
 
     public int PopCount()
@@ -93,5 +105,10 @@ public class TranspositionTable
     {
         int count = PopCount();
         return (int)(((float)count)/ size * 100);
+    }
+
+    private int TableIndex(ulong hash)
+    {
+        return (int) (hash & ((ulong)size-1));
     }
 }

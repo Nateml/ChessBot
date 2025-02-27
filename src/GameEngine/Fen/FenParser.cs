@@ -18,7 +18,7 @@ class FenParser
     public readonly ulong BK = 0ul;
 
     public readonly bool isWhiteToMove, cwk, cwq, cbk, cbq;
-    public readonly ulong epFile;
+    public readonly byte epFile;
     public readonly int halfMoveCount, fullMoveCount;
 
     public FenParser(string fen)
@@ -130,15 +130,15 @@ class FenParser
 
         epFile = fields[3][0] switch
         {
-            'a' => MoveGenData.FileMasks[0],
-            'b' => MoveGenData.FileMasks[1],
-            'c' => MoveGenData.FileMasks[2],
-            'd' => MoveGenData.FileMasks[3],
-            'e' => MoveGenData.FileMasks[4],
-            'f' => MoveGenData.FileMasks[5],
-            'g' => MoveGenData.FileMasks[6],
-            'h' => MoveGenData.FileMasks[7],
-            '-' => 0,
+            'a' => 0,
+            'b' => 1,
+            'c' => 2,
+            'd' => 3,
+            'e' => 4,
+            'f' => 5,
+            'g' => 6,
+            'h' => 7,
+            '-' => 8,
             _ => throw new BadFenStringException("Invalid en passant file."),
         };
 

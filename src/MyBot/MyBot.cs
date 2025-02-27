@@ -87,6 +87,8 @@ public class MyBot : IChessBot
 
             (Move newMove, int bestScore) = NegamaxAtRoot(board, distance, alpha, beta);
 
+            if (OutOfTime()) break;
+
             stopwatch.Stop();
 
             if (!board.IsMoveLegal(newMove)) 
@@ -191,6 +193,7 @@ public class MyBot : IChessBot
 
     private int Negamax(Board board, byte depth, int distanceFromRoot, int alpha, int beta, int colour)
     {
+        if (OutOfTime()) return 0;
         //if (UCI.IsStopRequested()) return 0;
 
         nodesReached++;
@@ -261,8 +264,9 @@ public class MyBot : IChessBot
 
         if ( depth == 0 ) 
         {
-            //return Evaluation.EvaluateBoard(board) * colour;
-            return Quiscence(board, QuiscenceDepth, distanceFromRoot+1, alpha, beta, colour);
+            // return Evaluation.EvaluateBoard(board) * colour;
+            // return Evaluation.EvaluateBoard(board, evalManager) * colour;
+            return Quiescence(board, QuiscenceDepth, distanceFromRoot+1, alpha, beta, colour);
         }
 
 
@@ -307,10 +311,13 @@ public class MyBot : IChessBot
             {
                 val = -Negamax(board, (byte)(depth-1), distanceFromRoot+1, -beta, -alpha, -colour);
             }
+
             //val = -Negamax(board, depth-1, distanceFromRoot+1, -beta, -alpha, -colour);
 
             board.UnmakeMove();
             evalManager.Undo();
+
+            if (OutOfTime()) return 0; // Exit early if we are out of time
 
             // Cut node (fail high)
             if (val >= beta) 
@@ -353,21 +360,21 @@ public class MyBot : IChessBot
         return bestScore;
     }
 
-    private int Quiscence(Board board, int depth, int distanceFromRoot, int alpha, int beta, int colour)
+    private int Quiescence(Board board, int depth, int distanceFromRoot, int alpha, int beta, int colour)
     {
         //if (UCI.IsStopRequested()) return 0;
+        if (OutOfTime()) return 0;
 
         nodesReached++;
 
         // Transposition table lookup
         TranspositionData? tdata = tTable.Get(board);
 
-        // We should only use the transposition if it was evaluated closer to the root node
-        if (tdata != null)
+        if (tdata != null && tdata.Flag == TranspositionData.ExactFlag)
         {
             // We should always use a transposition (no matter its depth) in the quiscence search
             transpositions++;
-            if (tdata.Flag == TranspositionData.ExactFlag) return tdata.Eval;
+            return tdata.Eval;
         }
 
         if ( depth == 0 ) return Evaluation.EvaluateBoard(board, evalManager) * colour;
@@ -399,9 +406,11 @@ public class MyBot : IChessBot
 
             board.MakeMove(move);
             evalManager.Update(move);
-            int val = -Quiscence(board, depth-1, distanceFromRoot+1, -beta, -alpha, -colour);
+            int val = -Quiescence(board, depth-1, distanceFromRoot+1, -beta, -alpha, -colour);
             board.UnmakeMove();
             evalManager.Undo();
+
+            if (OutOfTime()) return 0; // Exit early if we are out of time
 
             if (val >= beta) return val;
 

@@ -11,7 +11,7 @@ public static class Zobrist
     public static readonly ulong[] zCastle = new ulong[4];
     public static readonly ulong zBlackMove;
 
-    private static Random rNumGenerator = new();
+    private static RandomNumberGenerator rNumGenerator = RandomNumberGenerator.Create();
 
     static Zobrist()
     {
@@ -84,12 +84,9 @@ public static class Zobrist
             }
         }
 
-        for (int i = 0; i < 8; i++)
+        if (board.EpFile < 8)
         {
-            if (board.EpFile == MoveGenData.FileMasks[i])
-            {
-                zKey ^= zEnPassant[i];
-            }
+            zKey ^= zEnPassant[board.EpFile];
         }
 
         if (board.CanWhiteCastleKingside()) zKey ^= zCastle[0];
@@ -97,11 +94,15 @@ public static class Zobrist
         if (board.CanBlackCastleKingside()) zKey ^= zCastle[2];
         if (board.CanBlackCastleQueenside()) zKey ^= zCastle[3];
 
+        if (!board.IsWhiteToMove) zKey ^= zBlackMove;
+
         return zKey;
     }
 
     private static ulong GetRandom64()
     {
-        return (ulong)rNumGenerator.NextInt64();
+        var bytes = new byte[sizeof(ulong)];
+        rNumGenerator.GetBytes(bytes);
+        return BitConverter.ToUInt64(bytes, 0);
     }
 }

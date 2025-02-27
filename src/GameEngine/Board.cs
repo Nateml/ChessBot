@@ -17,7 +17,7 @@ public sealed class Board
 
     private int numPlySincePawnMoveOrCapture = 0;
 
-    private ulong epFile;
+    private byte epFile; 
     private bool CWK, CWQ, CBQ, CBK;
 
     private bool isWhiteToMove;
@@ -45,7 +45,7 @@ public sealed class Board
 
     public MoveGen moveGen;
 
-    List<IBoardListener> listeners;
+    List<IBoardListener> listeners = new();
 
     public const string FenStartingPosition = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
     //public const string FenStartingPosition = "rnbqkbnr/ppp1pppp/8/3p4/2P5/8/PP1PPPPP/RNBQKBNR w KQkq d5 1 2";
@@ -58,11 +58,11 @@ public sealed class Board
     public Board(string fen = FenStartingPosition)
     {
         bitboards[12] = ulong.MaxValue; // sentinal value
-        moveGen = new MoveGen(this);
         listeners = new();
         halfMoveCount = 0;
         fullMoveCount = 0;
         LoadPositionFromFen(fen);
+        moveGen = new MoveGen(this);
     }
 
     /// <summary>
@@ -108,6 +108,28 @@ public sealed class Board
     public void MakeMove(Move move)
     {
 
+        // Because I am getting some bugs, I am going to do a quick check if there is a piece on the from square
+        if ((bitboards[(int)move.MovingPiece] & (1ul << move.From)) == 0)
+        {
+            // Print out some debug information
+            Console.WriteLine("From square: " + move.From);
+            Console.WriteLine("To square: " + move.To);
+            Console.WriteLine("Moving piece: " + move.MovingPiece);
+            Console.WriteLine("Captured piece: " + move.CapturedPiece);
+            Console.WriteLine("Flag: " + move.Flag);
+            Console.WriteLine("Is capture: " + move.IsCapture());
+            Console.WriteLine("Is en passant: " + move.IsEnPassant());
+            Console.WriteLine("Is promotion: " + move.IsPromotion());
+            Console.WriteLine("Is kingside castle: " + move.IsKingsideCastle());
+            Console.WriteLine("Is queenside castle: " + move.IsQueensideCastle());
+            Console.WriteLine("Is double pawn push: " + move.IsDoublePawnPush());
+            Console.WriteLine("Is quiet move: " + move.IsQuietMove());
+            Console.WriteLine("Encoded move: " + move.EncodedMove);
+            Console.WriteLine("Move: " + move);
+            BitboardUtility.PrintBitboard(bitboards[(int)move.MovingPiece]);
+            throw new Exception("No piece on the from square");
+        }
+
         //repetitionHistory.Add(zobristHash);
 
         // Push state data to stack before making the move
@@ -131,37 +153,10 @@ public sealed class Board
         bool prevCWQ = CWQ;
         bool prevCBK = CBK;
         bool prevCBQ = CBQ;
-        ulong prevEnPasantFile = 0ul;
-        switch (epFile)
-        {
-            case 0x101010101010101ul:
-                prevEnPasantFile = 0;
-                break;
-            case 0x202020202020202ul:
-                prevEnPasantFile = 1;
-                break;
-            case 0x404040404040404ul:
-                prevEnPasantFile = 2;
-                break;
-            case 0x808080808080808ul:
-                prevEnPasantFile = 3;
-                break;
-            case 0x1010101010101010ul:
-                prevEnPasantFile = 4;
-                break;
-            case 0x2020202020202020ul:
-                prevEnPasantFile = 5;
-                break;
-            case 0x4040404040404040ul:
-                prevEnPasantFile = 6;
-                break;
-            case 0x8080808080808080ul:
-                prevEnPasantFile = 7;
-                break;
-        }
-
+        byte prevEnPasantFile = 8;
+        prevEnPasantFile = epFile;
         // Clear en passant file
-        epFile = 0;
+        epFile = 8;
 
         // Update the moving piece's bitboard
 
@@ -207,11 +202,11 @@ public sealed class Board
         {
             CWK = false;
             CWQ = false;
-            if (prevCWK != CWK)
+            if (prevCWK)
             {
                 newZobristHash ^= Zobrist.zCastle[0];
             }
-            if (prevCWQ != CWQ)
+            if (prevCWQ)
             {
                 newZobristHash ^= Zobrist.zCastle[1];
             }
@@ -235,19 +230,19 @@ public sealed class Board
             {
                 case 63:
                     CWK = false;
-                    if (prevCWK != CWK) newZobristHash ^= Zobrist.zCastle[0];
+                    if (prevCWK) newZobristHash ^= Zobrist.zCastle[0];
                     break;
                 case 56:
                     CWQ = false;
-                    if (prevCWQ != CWQ) newZobristHash ^= Zobrist.zCastle[1];
+                    if (prevCWQ) newZobristHash ^= Zobrist.zCastle[1];
                     break;
                 case 7:
                     CBK = false;
-                    if (prevCBK != CBK) newZobristHash ^= Zobrist.zCastle[2];
+                    if (prevCBK) newZobristHash ^= Zobrist.zCastle[2];
                     break;
                 case 0:
                     CBQ = false;
-                    if (prevCBQ != CBQ) newZobristHash ^= Zobrist.zCastle[3];
+                    if (prevCBQ) newZobristHash ^= Zobrist.zCastle[3];
                     break;
             }
         } 
@@ -290,7 +285,7 @@ public sealed class Board
         else if (movingPiece == PieceType.WP || movingPiece == PieceType.BP)
         {
             numPlySincePawnMoveOrCapture = 0;
-            if (move.IsDoublePawnPush()) epFile = MoveGenData.FileMasks[to % 8]; // Record the EP file
+            if (move.IsDoublePawnPush()) epFile = (byte) (to % 8); // Record the EP file
         }
         else if (move.IsKingsideCastle())
         {
@@ -300,14 +295,20 @@ public sealed class Board
                 bitboards[(int)PieceType.WR] ^= 0b101ul << 61;
                 allPiecesBitboard ^= 0b101ul << 61;
                 CWK = false;
-                newZobristHash ^= Zobrist.zCastle[0];
+                // Update Zobrist Hash
+                // newZobristHash ^= Zobrist.zCastle[0]; // I would have already done this when checking if a piece moved from square 63
+                newZobristHash ^= Zobrist.zArray[(int)PieceType.WR][63]; // Remove old rook position
+                newZobristHash ^= Zobrist.zArray[(int)PieceType.WR][61]; // Add new rook position
             }
             else
             {
                 bitboards[(int)PieceType.BR] ^= 0b10100000ul;
                 allPiecesBitboard ^= 0b10100000ul;
                 CBK = false;
-                newZobristHash ^= Zobrist.zCastle[2];
+                // Update Zobrist Hash
+                // newZobristHash ^= Zobrist.zCastle[2];
+                newZobristHash ^= Zobrist.zArray[(int)PieceType.BR][7]; // Remove old rook position
+                newZobristHash ^= Zobrist.zArray[(int)PieceType.BR][5]; // Add new rook position
             }
         }
         else if (move.IsQueensideCastle())
@@ -318,27 +319,38 @@ public sealed class Board
                 bitboards[(int)PieceType.WR] ^= 0b1001ul << 56;
                 allPiecesBitboard ^= 0b1001ul << 56;
                 CWQ = false;
-                newZobristHash ^= Zobrist.zCastle[1];
+                // newZobristHash ^= Zobrist.zCastle[1];
+                newZobristHash ^= Zobrist.zArray[(int)PieceType.WR][56]; // Remove old rook position
+                newZobristHash ^= Zobrist.zArray[(int)PieceType.WR][59]; // Add new rook position
             }
             else
             {
                 bitboards[(int)PieceType.BR] ^= 0b1001ul;
                 allPiecesBitboard ^= 0b1001ul;
                 CBQ = false;
-                newZobristHash ^= Zobrist.zCastle[3];
+                // newZobristHash ^= Zobrist.zCastle[3];
+                newZobristHash ^= Zobrist.zArray[(int)PieceType.BR][0]; // Remove old rook position
+                newZobristHash ^= Zobrist.zArray[(int)PieceType.BR][3]; // Add new rook position
             }
         }
 
+        // XOR in the new en-passant file
+        if (epFile != 8) newZobristHash ^= Zobrist.zEnPassant[epFile];
+
+
+        isWhiteToMove = !isWhiteToMove; // Toggle who's turn it is
+        newZobristHash ^= Zobrist.zBlackMove;
+
         // Update state information
-        isWhiteToMove = !isWhiteToMove;
         if (halfMoveCount != 1 || ((halfMoveCount == 1) && IsWhiteToMove))
         {
             halfMoveCount++;
         }
         if (halfMoveCount % 2 == 0) fullMoveCount++;
 
-        newZobristHash ^= Zobrist.zBlackMove;
-        newZobristHash ^= Zobrist.zEnPassant[prevEnPasantFile];
+        if (prevEnPasantFile != 8) {
+            newZobristHash ^= Zobrist.zEnPassant[prevEnPasantFile];
+        }
 
         zobristHash = newZobristHash;
 
@@ -452,9 +464,9 @@ public sealed class Board
     public bool IsWhiteToMove { get { return isWhiteToMove; } }
 
     /// <summary>
-    /// Returns the file mask of the current file where an en-passant is possible, or zero if there is no legal en-passant.
+    /// Returns the file number (starting from zero) of the file where an en-passant is possible, or 8 if there is no legal en-passant.
     /// </summary>
-    public ulong EpFile { get { return epFile; } }
+    public byte EpFile { get { return epFile; } }
 
     /// <summary>
     /// Returns true if white has kingside castling permission, false otherwise.
@@ -476,7 +488,9 @@ public sealed class Board
     /// </summary>
     public bool CanBlackCastleQueenside() { return CBQ; }
 
-    public ulong ZobristHash => zobristHash;
+    public ulong ZobristHash {
+        get { return zobristHash; }
+    }
 
     /// <summary>
     /// A HashSet of all the positions, represented by zobrist keys, which have appeared in the board's history.
