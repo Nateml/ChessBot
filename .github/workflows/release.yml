@@ -49,8 +49,13 @@ jobs:
 
       - name: Zip build files
         run: |
-          cd build/${{ matrix.target }}
-          zip -r ../../chess-engine-${{ matrix.target }}.zip .
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            Compress-Archive -Path build/${{ matrix.target }} -DestinationPath chess-engine-${{ matrix.target }}.zip
+          else
+            cd build/${{ matrix.target }}
+            zip -r ../../chess-engine-${{ matrix.target }}.zip .
+          fi
+        shell: pwsh
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
