@@ -1,12 +1,14 @@
 name: Build for Windows, MacOS and Ubuntu
 
 on:
-  push:
-    branches:
-      - main
   pull_request:
     branches:
       - main
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '.github/**'  # Prevent running on workflow file updates
 
 jobs:
   build:
