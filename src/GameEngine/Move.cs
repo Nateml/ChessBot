@@ -207,18 +207,6 @@ public class Move
     {
         string output = ((Square)From).ToString().ToLower() + ((Square)To).ToString().ToLower();
 
-        // Add the piece type
-        output += MovingPiece switch
-        {
-            PieceType.WP or PieceType.BP => "",
-            PieceType.WN or PieceType.BN => "n",
-            PieceType.WB or PieceType.BB => "b",
-            PieceType.WR or PieceType.BR => "r",
-            PieceType.WQ or PieceType.BQ => "q",
-            PieceType.WK or PieceType.BK => "k",
-            _ => throw new Exception("Invalid piece type"),
-        };  
-
         // Add if it was a castle
         if (IsKingsideCastle())
         {
