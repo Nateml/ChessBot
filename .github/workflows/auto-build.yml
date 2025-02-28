@@ -1,4 +1,4 @@
-name: Build for Windows, MacOS and Ubuntu
+name: Build .NET
 
 on:
   pull_request:
