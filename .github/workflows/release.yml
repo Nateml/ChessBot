@@ -101,7 +101,7 @@ jobs:
       - name: Checkout lichess-bot repository
         uses: actions/checkout@v4
         with:
-          repository: your-username/lichess-bot
+          repository: Nateml/lichess-bot
           token: ${{ secrets.LICHESS_BOT_PAT }}
           path: lichess-bot
 
@@ -110,6 +110,12 @@ jobs:
         with:
           name: chess-engine-linux-x64
           path: lichess-bot/engines/ChessBot/
+
+      - name: Unzip the artifact
+        run: |
+          cd lichess-bot/engines/ChessBot/
+          unzip chess-engine-linux-x64.zip
+          rm chess-engine-linux-x64.zip # Remove the zip file
 
       - name: Verify files
         run: ls -R lichess-bot/engines/ChessBot/
