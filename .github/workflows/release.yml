@@ -127,4 +127,4 @@ jobs:
           git config --global user.email "github-actions@github.com"
           git add engines/
           git commit -m "Updated Chess Engine to latest version"
-          git push origin main
+          git push origin master
