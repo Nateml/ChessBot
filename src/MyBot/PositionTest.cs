@@ -73,7 +73,7 @@ public class PositionTest
             counter++;
             string fen = currentPosition.Split("bm")[0].Trim() + " 0 1";
             Board board = new(fen);
-            Move bestMove = bot.GetBestMove(board, 15000, true, false); 
+            Move bestMove = bot.GetBestMove(board, 10000, true, false); 
             string bestMoveAlgebraic = bestMove.ToString();
             bool foundBestMove = false;
             foreach (string bm in currentPosition.Split("bm")[1].Split(","))
