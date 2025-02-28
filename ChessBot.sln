@@ -1,31 +1,22 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
-VisualStudioVersion = 17.5.002.0
+VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ChessBot", "ChessBot.csproj", "{78FD60E6-5589-48E4-A29E-0F5EAB2955A9}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RandomNumberTest", "..\RandomNumberTest\RandomNumberTest\RandomNumberTest.csproj", "{1F2BD9B2-D111-4811-847A-6977D028284A}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ChessBot", "ChessBot.csproj", "{ECD4B5C6-49F9-4AE5-ACF8-1E963CFBBF8E}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
-	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{78FD60E6-5589-48E4-A29E-0F5EAB2955A9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{78FD60E6-5589-48E4-A29E-0F5EAB2955A9}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{78FD60E6-5589-48E4-A29E-0F5EAB2955A9}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{78FD60E6-5589-48E4-A29E-0F5EAB2955A9}.Release|Any CPU.Build.0 = Release|Any CPU
-		{1F2BD9B2-D111-4811-847A-6977D028284A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{1F2BD9B2-D111-4811-847A-6977D028284A}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{1F2BD9B2-D111-4811-847A-6977D028284A}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{1F2BD9B2-D111-4811-847A-6977D028284A}.Release|Any CPU.Build.0 = Release|Any CPU
-	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
-	GlobalSection(ExtensibilityGlobals) = postSolution
-		SolutionGuid = {9DC1E36C-D620-4DC4-8DB7-1EA5C546CC8E}
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{ECD4B5C6-49F9-4AE5-ACF8-1E963CFBBF8E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{ECD4B5C6-49F9-4AE5-ACF8-1E963CFBBF8E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{ECD4B5C6-49F9-4AE5-ACF8-1E963CFBBF8E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{ECD4B5C6-49F9-4AE5-ACF8-1E963CFBBF8E}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
