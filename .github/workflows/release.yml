@@ -3,31 +3,16 @@ name: Build & Release
 on:
   push:
     tags:
-      - 'v*'  # Runs when a new tag like "v1.0.0" is pushed
+      - 'v*'  # Runs only when a new version tag (e.g., v1.0.0) is pushed
 
 jobs:
   build:
-    name: Build and Upload Executable
-    runs-on: ${{ matrix.os }}
+    name: Build and Release Executables
+    runs-on: ubuntu-latest  # Run on a single system (Ubuntu)
 
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        target: [win-x64, linux-x64, osx-x64]
-
-        exclude:
-          - os: ubuntu-latest
-            target: win-x64
-          - os: ubuntu-latest
-            target: osx-x64
-          - os: macos-latest
-            target: win-x64
-          - os: macos-latest
-            target: linux-x64
-          - os: windows-latest
-            target: linux-x64
-          - os: windows-latest
-            target: osx-x64
+        target: [win-x64, linux-x64, osx-x64]  # Only target different architectures, not OS environments
 
     steps:
       - name: Checkout repository
@@ -36,7 +21,7 @@ jobs:
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v3
         with:
-          dotnet-version: 8.0.x  # Change this based on your project
+          dotnet-version: 8.0.x  # Change based on your project
 
       - name: Restore dependencies
         run: dotnet restore
@@ -44,18 +29,13 @@ jobs:
       - name: Build project
         run: dotnet build --configuration Release --no-restore
 
-      - name: Publish executable
+      - name: Publish executable for ${{ matrix.target }}
         run: dotnet publish -c Release -r ${{ matrix.target }} --self-contained true -o ./build/${{ matrix.target }}
 
       - name: Zip build files
         run: |
-          if [ "$RUNNER_OS" == "Windows" ]; then
-            Compress-Archive -Path build/${{ matrix.target }} -DestinationPath chess-engine-${{ matrix.target }}.zip
-          else
-            cd build/${{ matrix.target }}
-            zip -r ../../chess-engine-${{ matrix.target }}.zip .
-          fi
-        shell: pwsh
+          cd build/${{ matrix.target }}
+          zip -r ../../chess-engine-${{ matrix.target }}.zip .
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
@@ -78,22 +58,14 @@ jobs:
         id: get_version
         run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
 
-      - name: Generate Changelog
-        id: changelog
-        run: |
-          echo "CHANGELOG<<EOF" >> $GITHUB_ENV
-          git log $(git describe --tags --abbrev=0 @^)..@ --pretty=format:"- %s (%an)" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.VERSION }}
           name: Release ${{ env.VERSION }}
-          body: |
-            🚀 **New release!**
-            
-            🔄 **Changelog:**
-            ${{ env.CHANGELOG }}
+          body: "🚀 New release of the Chess Engine!"
+          draft: false
+          prerelease: false
+          files: artifacts/*/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
