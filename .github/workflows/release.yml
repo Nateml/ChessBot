@@ -114,7 +114,7 @@ jobs:
       - name: Unzip the artifact
         run: |
           cd lichess-bot/engines/ChessBot/
-          unzip chess-engine-linux-x64.zip
+          unzip -o chess-engine-linux-x64.zip # -o to overwrite existing files
           rm chess-engine-linux-x64.zip # Remove the zip file
 
       - name: Verify files
