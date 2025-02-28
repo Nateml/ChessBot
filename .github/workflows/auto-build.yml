@@ -1,0 +1,57 @@
+name: Build for Windows, MacOS and Ubuntu
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build and Store Executable
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        target: [win-x64, linux-x64, osx-x64]
+
+        exclude:
+          - os: ubuntu-latest
+            target: win-x64
+          - os: ubuntu-latest
+            target: osx-x64
+          - os: macos-latest
+            target: win-x64
+          - os: macos-latest
+            target: linux-x64
+          - os: windows-latest
+            target: linux-x64
+          - os: windows-latest
+            target: osx-x64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: 7.0.x  # Change to your project's .NET version
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build project
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Publish executable
+        run: dotnet publish -c Release -r ${{ matrix.target }} --self-contained true -o ./build/${{ matrix.target }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chess-bot-${{ matrix.target }}
+          path: build/${{ matrix.target }}
