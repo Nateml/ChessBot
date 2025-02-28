@@ -8,11 +8,11 @@ on:
 jobs:
   build:
     name: Build and Release Executables
-    runs-on: ubuntu-latest  # Run on a single system (Ubuntu)
+    runs-on: ubuntu-latest  # Only run on Ubuntu
 
     strategy:
       matrix:
-        target: [win-x64, linux-x64, osx-x64]  # Only target different architectures, not OS environments
+        target: [win-x64, linux-x64, osx-x64]  # Build for different platforms
 
     steps:
       - name: Checkout repository
@@ -49,6 +49,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for changelog generation
+
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
         with:
@@ -58,14 +63,28 @@ jobs:
         id: get_version
         run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
 
+      - name: Generate Changelog from commits
+        id: changelog
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 $(git rev-list --tags --skip=1 --max-count=1) 2>/dev/null || echo "")
+          if [ -z "$PREV_TAG" ]; then
+            echo "CHANGELOG=First release 🎉" >> $GITHUB_ENV
+          else
+            LOG=$(git log $PREV_TAG..HEAD --pretty=format:"- %s (%an)" --no-merges)
+            echo "CHANGELOG<<EOF" >> $GITHUB_ENV
+            echo "$LOG" >> $GITHUB_ENV
+            echo "EOF" >> $GITHUB_ENV
+          fi
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.VERSION }}
           name: Release ${{ env.VERSION }}
-          body: "🚀 New release of the Chess Engine!"
-          draft: false
-          prerelease: false
-          files: artifacts/*/*.zip
+          body: |
+            🚀 **New release!**
+
+            🔄 **Changelog:**
+            ${{ env.CHANGELOG }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
