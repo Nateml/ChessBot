@@ -35,11 +35,11 @@ public static class Evaluation
         int openingPositionalScore = 0;
         int endgamePositionalScore = 0;
 
-        int knightMobility = 0;
+        //int knightMobility = 0;
 
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.WN), (knightIndex) => {
             // Calculate knight mobility
-            knightMobility += BitboardUtility.CountSetBits(MoveGenData.knightTargets[knightIndex] & ~(board.WhitePiecesBitboard | board.BlackPawnAttackBitboard));
+            // knightMobility += BitboardUtility.CountSetBits(MoveGenData.knightTargets[knightIndex] & ~(board.WhitePiecesBitboard | board.BlackPawnAttackBitboard));
 
             // Penalty for having a minor piece on an undefended square
             if (!BitboardUtility.IsBitSet(board.WhiteAttackBitboard, knightIndex))
@@ -51,7 +51,7 @@ public static class Evaluation
 
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.BN), (knightIndex) => {
             // Calculate knight mobility
-            knightMobility -= BitboardUtility.CountSetBits(MoveGenData.knightTargets[knightIndex] & ~(board.BlackPiecesBitboard | board.WhitePawnAttackBitboard));
+            // knightMobility -= BitboardUtility.CountSetBits(MoveGenData.knightTargets[knightIndex] & ~(board.BlackPiecesBitboard | board.WhitePawnAttackBitboard));
 
             if (!BitboardUtility.IsBitSet(board.BlackAttackBitboard, knightIndex))
             {
@@ -119,7 +119,7 @@ public static class Evaluation
 
         eval += rookOnOpenFileBonus;
 
-        eval += knightMobility * KnightMobilityBonus;
+        // eval += knightMobility * KnightMobilityBonus;
 
         // Penalty for being in check:
         if (board.IsKingInCheck(true))
