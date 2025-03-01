@@ -7,7 +7,7 @@ using ChessBot;
 public class MyBot : IChessBot
 {
 
-    public readonly TranspositionTable tTable = new(0x100000);
+    public readonly TranspositionTable tTable = new(8034709);
 
     private int nodesReached = 0;
 
