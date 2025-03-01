@@ -271,9 +271,9 @@ public class MyBot : IChessBot
         if (depth >= 5 && !board.IsKingInCheck(board.IsWhiteToMove) && !board.IsKingInCheck(!board.IsWhiteToMove))
         {
             const int R = 3;
-            board.MakeNullMove();
+            board.MakeMove(Move.MakeNullMove());
             int val = -Negamax(board, (byte)(depth-1-R), distanceFromRoot+1, -beta, -beta+1, -colour, cancellationToken);
-            board.UnmakeNullMove();
+            board.UnmakeMove();
             if (val >= beta) return val;
         }
 
