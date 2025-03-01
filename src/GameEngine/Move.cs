@@ -207,16 +207,6 @@ public class Move
     {
         string output = ((Square)From).ToString().ToLower() + ((Square)To).ToString().ToLower();
 
-        // Add if it was a castle
-        if (IsKingsideCastle())
-        {
-            output = "O-O";
-        }
-        else if (IsQueensideCastle())
-        {
-            output = "O-O-O";
-        }
-
         PieceType? promotedPiece = GetPromotionType();
         if (promotedPiece != null)
         {

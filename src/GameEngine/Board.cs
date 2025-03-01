@@ -13,7 +13,8 @@ public sealed class Board
 
     private ulong allPiecesBitboard = 0ul;
 
-    private HashSet<ulong> repetitionHistory = new();
+    // The following two fields are used for threefold repetition detection
+    private LinkedList<ulong> history = new();
 
     private int numPlySincePawnMoveOrCapture = 0;
 
@@ -101,36 +102,59 @@ public sealed class Board
         zobristHash = Zobrist.GetZobristHash(this);
     }
 
+    public void MakeNullMove()
+    {
+        // This is just like "passing the turn"
+        // We just toggle the side to move and update the zobrist hash
+        // Also get rid of the en passant file and increment the move count
+        history.AddLast(zobristHash);
+
+        numPlySincePawnMoveOrCapture++;
+
+        if (halfMoveCount != 1 || ((halfMoveCount == 1) && IsWhiteToMove))
+        {
+            halfMoveCount++;
+        }
+        if (halfMoveCount % 2 == 0) fullMoveCount++;
+
+        // I am not going to bother with en passant right now
+        // because its a pain to undo this...
+        // if (epFile != 8)
+        // {
+        //     zobristHash ^= Zobrist.zEnPassant[epFile];
+        //     epFile = 8;
+        // }
+
+        isWhiteToMove = !isWhiteToMove;
+        zobristHash ^= Zobrist.zBlackMove;
+        listeners.ForEach(listener => listener.OnBoardStateChange());
+    }
+
+    public void UnmakeNullMove()
+    {
+        history.RemoveLast();
+        numPlySincePawnMoveOrCapture--;
+
+        if (halfMoveCount != 1 || ((halfMoveCount == 1) && IsWhiteToMove))
+        {
+            halfMoveCount--;
+        }
+        if (halfMoveCount % 2 == 0) fullMoveCount--;
+
+        isWhiteToMove = !isWhiteToMove;
+        zobristHash ^= Zobrist.zBlackMove;
+        listeners.ForEach(listener => listener.OnBoardStateChange());
+    }
+
     /// <summary>
     /// Makes a given move, updates the appropriate bitboards and other state information.
     /// Notifies listeners of a state change.
     /// </summary>
     public void MakeMove(Move move)
     {
-
-        // Because I am getting some bugs, I am going to do a quick check if there is a piece on the from square
-        if ((bitboards[(int)move.MovingPiece] & (1ul << move.From)) == 0)
-        {
-            // Print out some debug information
-            Console.WriteLine("From square: " + move.From);
-            Console.WriteLine("To square: " + move.To);
-            Console.WriteLine("Moving piece: " + move.MovingPiece);
-            Console.WriteLine("Captured piece: " + move.CapturedPiece);
-            Console.WriteLine("Flag: " + move.Flag);
-            Console.WriteLine("Is capture: " + move.IsCapture());
-            Console.WriteLine("Is en passant: " + move.IsEnPassant());
-            Console.WriteLine("Is promotion: " + move.IsPromotion());
-            Console.WriteLine("Is kingside castle: " + move.IsKingsideCastle());
-            Console.WriteLine("Is queenside castle: " + move.IsQueensideCastle());
-            Console.WriteLine("Is double pawn push: " + move.IsDoublePawnPush());
-            Console.WriteLine("Is quiet move: " + move.IsQuietMove());
-            Console.WriteLine("Encoded move: " + move.EncodedMove);
-            Console.WriteLine("Move: " + move);
-            BitboardUtility.PrintBitboard(bitboards[(int)move.MovingPiece]);
-            throw new Exception("No piece on the from square");
-        }
-
         //repetitionHistory.Add(zobristHash);
+
+        history.AddLast(zobristHash);
 
         // Push state data to stack before making the move
         stateHistory.Push(new StateData(move, CWK, CWQ, CBK, CBQ, epFile, fullMoveCount, halfMoveCount, zobristHash, numPlySincePawnMoveOrCapture));
@@ -364,6 +388,7 @@ public sealed class Board
     public void UnmakeMove()
     {
         //repetitionHistory.Remove(zobristHash);
+        history.RemoveLast();
 
         StateData previousState = stateHistory.Pop();
         Move move = previousState.lastMove;
@@ -492,10 +517,7 @@ public sealed class Board
         get { return zobristHash; }
     }
 
-    /// <summary>
-    /// A HashSet of all the positions, represented by zobrist keys, which have appeared in the board's history.
-    /// </summary>
-    public HashSet<ulong> RepetitionHistory => repetitionHistory;
+    public LinkedList<ulong> History => history;
 
     public int WhiteKingSquare
     {

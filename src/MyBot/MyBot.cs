@@ -7,13 +7,13 @@ using ChessBot;
 public class MyBot : IChessBot
 {
 
-    public readonly TranspositionTable tTable = new(0x100000);
+    public readonly TranspositionTable tTable = new(8034709);
 
     private int nodesReached = 0;
 
     private readonly byte MaxDistance = 50;
 
-    private readonly int QuiscenceDepth = 100;
+    private readonly int QuiscenceDepth = 50;
 
     private int transpositions = 0;
 
@@ -34,6 +34,8 @@ public class MyBot : IChessBot
 
     private EvaluationManager evalManager;
 
+    private Move? bestMove;
+
     private Stopwatch clock = new Stopwatch();
 
     public MyBot()
@@ -48,7 +50,7 @@ public class MyBot : IChessBot
         killerMoves.Clear();
     }
 
-    public Move GetBestMove(Board board, int timeLeft, bool fixedTime = false, bool printToConsole = true)
+    public Move GetBestMove(Board board, int timeLeft, CancellationToken cancellationToken, bool fixedTime = false, bool printToConsole = true)
     {
         // Play a book move if we can
         if (!isOutOfBook)
@@ -80,14 +82,14 @@ public class MyBot : IChessBot
         int alpha = -100000;
         int beta = 100000;
         int retryMultiplier = 0;
-        for (byte distance = 1; distance < MaxDistance && !OutOfTime() && !exitSearch;)
+        for (byte distance = 1; distance < MaxDistance && !OutOfTime() && !exitSearch && !cancellationToken.IsCancellationRequested;)
         {
             Stopwatch stopwatch = new();
             stopwatch.Start();
 
-            (Move newMove, int bestScore) = NegamaxAtRoot(board, distance, alpha, beta);
+            (Move newMove, int bestScore) = NegamaxAtRoot(board, distance, alpha, beta, cancellationToken);
 
-            if (OutOfTime()) break;
+            if (OutOfTime() || cancellationToken.IsCancellationRequested) break;
 
             stopwatch.Stop();
 
@@ -146,7 +148,7 @@ public class MyBot : IChessBot
         return priorityMove;
     }
 
-    private (Move, int) NegamaxAtRoot(Board board, byte depth, int alpha, int beta)
+    private (Move, int) NegamaxAtRoot(Board board, byte depth, int alpha, int beta, CancellationToken cancellationToken)
     {
         nodesReached = 0;
         transpositions = 0;
@@ -163,7 +165,7 @@ public class MyBot : IChessBot
         Move bestMove = moves[0];
         int bestScore = -1000000;
 
-        for (int i = 0; i < moves.Length && !OutOfTime(); i++)
+        for (int i = 0; i < moves.Length && !OutOfTime() && !cancellationToken.IsCancellationRequested; i++)
         {
             nodesReached++;
             PickMoveRoot(moves, i, board);
@@ -171,7 +173,7 @@ public class MyBot : IChessBot
 
             board.MakeMove(move);
             evalManager.Update(move);
-            int score = -Negamax(board, (byte)(depth-1), 1, -beta, -alpha, board.IsWhiteToMove ? 1 : -1);
+            int score = -Negamax(board, (byte)(depth-1), 1, -beta, -alpha, board.IsWhiteToMove ? 1 : -1, cancellationToken);
             board.UnmakeMove();
             evalManager.Undo();
 
@@ -191,37 +193,33 @@ public class MyBot : IChessBot
         return (bestMove, bestScore);
     }
 
-    private int Negamax(Board board, byte depth, int distanceFromRoot, int alpha, int beta, int colour)
+    private int Negamax(Board board, byte depth, int distanceFromRoot, int alpha, int beta, int colour, CancellationToken cancellationToken)
     {
-        if (OutOfTime()) return 0;
+        if (OutOfTime() || cancellationToken.IsCancellationRequested) return 0;
         //if (UCI.IsStopRequested()) return 0;
 
         nodesReached++;
 
-        /*
-        if (board.RepetitionHistory.Contains(board.ZobristHash))
+        // Check for 3-fold repetition and 50 move rule
+        // Draws rarely happen before 4 ply since an irreverisble move,
+        // so we can save some time by not checking before that
+        if (board.NumPlySincePawnMoveOrCapture >= 4)
         {
-            // Detect draw by three-fold repetion.
-            // This only checks if the position has been reached once before.
-            // Implementation taken from Sebastian Lague's video "Coding Adventure: Making a Better Chess Bot"
-            // Note from him: With this approach, the program might repeat a losing move 
-            // (where the opponent missed the winning response before) because it thinks its already a draw.
-            // On the other hand, if we only return a draw score when the position has already occured twice,
-            // the program might often choose to repeat a position a single time before making a different move.
-            // Note from me: With this approach, the implementation is also a whole lot easier because I can just
-            // use a hash set of zobrist keys for a quick lookup, instead of having to use a different data structure
-            // which allows duplicates...
-            // One idea is to use an integer array with zobrist keys as a lookup index, wherein we just increment the
-            // appropriate element every time we stumble upon it. However, there are bound to be collisions (there are
-            // way more zobrist keys than I can fit into a reasonably sized array)...
-            return 0;
+            if (board.NumPlySincePawnMoveOrCapture >= 100) // 50 move rule
+            {
+                return 0; // Draw
+            }
+
+            // Check for 3-fold repetition
+
+            int repetitions = CountRepetitions(board.History, board.ZobristHash, board.NumPlySincePawnMoveOrCapture);
+            // If we have repeated the position three times, or if we have repeated the position twice and we are two ply away from the root
+            // then we return a draw.
+            if (repetitions >= 3 || (repetitions >= 2 && distanceFromRoot > 2)) 
+            {
+                return 0; // Draw
+            }
         }
-        else if (board.NumPlySincePawnMoveOrCapture >= 100)
-        {
-            // Check 50 move rule
-            return 0;
-        }
-        */
 
         // Store the initial alpha to check node type later on
         int originalAlpha = alpha;
@@ -269,6 +267,15 @@ public class MyBot : IChessBot
             return Quiescence(board, QuiscenceDepth, distanceFromRoot+1, alpha, beta, colour);
         }
 
+        // Null Move Pruning
+        if (depth >= 5 && !board.IsKingInCheck(board.IsWhiteToMove) && !board.IsKingInCheck(!board.IsWhiteToMove))
+        {
+            const int R = 3;
+            board.MakeNullMove();
+            int val = -Negamax(board, (byte)(depth-1-R), distanceFromRoot+1, -beta, -beta+1, -colour, cancellationToken);
+            board.UnmakeNullMove();
+            if (val >= beta) return val;
+        }
 
         Move[] moves = board.GetLegalMoves();
 
@@ -286,6 +293,7 @@ public class MyBot : IChessBot
         int bestScore = -1000001;
         for (int i = 0; i < moves.Length; i++)
         {
+
             PickMove(moves, i, board, distanceFromRoot, bestMove);
             Move move = moves[i];
 
@@ -294,22 +302,22 @@ public class MyBot : IChessBot
 
             int val;
 
-            if (i > 8 && depth >= 3 && !move.IsCapture())
+            if (i > 5 && depth >= 3 && !move.IsCapture())
             {
                 // We make the assumption that because our move ordering is good (hopefully), that moves further down in the list are likely bad,
                 //      so we search them at a reduced depth with a smaller aspiration window.
                 const int reduceDepth = 1;
-                val = -Negamax(board, (byte)(depth-1-reduceDepth), distanceFromRoot+1, -alpha-1, -alpha, -colour);
+                val = -Negamax(board, (byte)(depth-1-reduceDepth), distanceFromRoot+1, -alpha-1, -alpha, -colour, cancellationToken);
 
                 // If we get an evaluation better than we expected, we have to research the node with the full depth
                 if (val > alpha)
                 {
-                    val = -Negamax(board, (byte)(depth-1), distanceFromRoot+1, -beta, -alpha, -colour);
+                    val = -Negamax(board, (byte)(depth-1), distanceFromRoot+1, -beta, -alpha, -colour, cancellationToken);
                 }
             }
             else
             {
-                val = -Negamax(board, (byte)(depth-1), distanceFromRoot+1, -beta, -alpha, -colour);
+                val = -Negamax(board, (byte)(depth-1), distanceFromRoot+1, -beta, -alpha, -colour, cancellationToken);
             }
 
             //val = -Negamax(board, depth-1, distanceFromRoot+1, -beta, -alpha, -colour);
@@ -317,7 +325,7 @@ public class MyBot : IChessBot
             board.UnmakeMove();
             evalManager.Undo();
 
-            if (OutOfTime()) return 0; // Exit early if we are out of time
+            if (OutOfTime() || cancellationToken.IsCancellationRequested) return 0; // Exit early if we are out of time
 
             // Cut node (fail high)
             if (val >= beta) 
@@ -536,5 +544,37 @@ public class MyBot : IChessBot
 
         return pv;
     }
+
+    /// <summary>
+    /// Used to check for 3-fold repetition.
+    /// Taken from https://groups.google.com/g/rec.games.chess.computer/c/ft82tUpHJn0/m/FJNPi4KWjRYJ
+    /// </summary>
+    private static int CountRepetitions(LinkedList<ulong> hashHistory, ulong currentHash, int numPlySincePawnMoveOrCapture)
+    {
+        int count = 0;
+
+        // Iterate backwards through the history
+        LinkedListNode<ulong>? node = hashHistory.Last;
+        while (numPlySincePawnMoveOrCapture > 0 && node != null)
+        {
+            if (node.Value == currentHash)
+            {
+                count++;
+            }
+            if (count == 2) return count;
+
+            // I have to iterate two nodes at a time because 
+            // I want to always look at it from the perspective of the player
+            // who made the last move
+            node = node.Previous;
+            if (node == null) break;
+            node = node.Previous;
+
+            numPlySincePawnMoveOrCapture -= 2;
+        }
+        return count;
+    }
+
+    public Move? BestMove { get { return bestMove; }}
 
 }
