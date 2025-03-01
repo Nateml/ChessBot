@@ -14,7 +14,7 @@ public sealed class Board
     private ulong allPiecesBitboard = 0ul;
 
     // The following two fields are used for threefold repetition detection
-    private LinkedList<ulong> history = new();
+    private readonly LinkedList<ulong> history = new();
 
     private int numPlySincePawnMoveOrCapture = 0;
 
@@ -111,6 +111,8 @@ public sealed class Board
 
         numPlySincePawnMoveOrCapture++;
 
+        isWhiteToMove = !isWhiteToMove;
+
         if (halfMoveCount != 1 || ((halfMoveCount == 1) && IsWhiteToMove))
         {
             halfMoveCount++;
@@ -124,8 +126,6 @@ public sealed class Board
         //     zobristHash ^= Zobrist.zEnPassant[epFile];
         //     epFile = 8;
         // }
-
-        isWhiteToMove = !isWhiteToMove;
         zobristHash ^= Zobrist.zBlackMove;
         listeners.ForEach(listener => listener.OnBoardStateChange());
     }
@@ -142,6 +142,7 @@ public sealed class Board
         if (halfMoveCount % 2 == 0) fullMoveCount--;
 
         isWhiteToMove = !isWhiteToMove;
+
         zobristHash ^= Zobrist.zBlackMove;
         listeners.ForEach(listener => listener.OnBoardStateChange());
     }
@@ -153,26 +154,15 @@ public sealed class Board
     public void MakeMove(Move move)
     {
         //repetitionHistory.Add(zobristHash);
-
         history.AddLast(zobristHash);
 
         // Push state data to stack before making the move
         stateHistory.Push(new StateData(move, CWK, CWQ, CBK, CBQ, epFile, fullMoveCount, halfMoveCount, zobristHash, numPlySincePawnMoveOrCapture));
 
+        ulong newZobristHash = zobristHash;
+
         numPlySincePawnMoveOrCapture++;
 
-        int to = move.To;
-        int from = move.From;
-
-        ulong fromBitboard = 1ul << from;
-        ulong toBitboard = 1ul << to;
-
-        PieceType movingPiece = move.MovingPiece;
-        PieceType capturedPiece = move.CapturedPiece;
-
-        bool white = MoveUtility.GetPieceColour(movingPiece) == 0;
-
-        ulong newZobristHash = zobristHash;
         bool prevCWK = CWK;
         bool prevCWQ = CWQ;
         bool prevCBK = CBK;
@@ -182,185 +172,203 @@ public sealed class Board
         // Clear en passant file
         epFile = 8;
 
-        // Update the moving piece's bitboard
+        if (!move.IsNullMove)
+        {
+            int to = move.To;
+            int from = move.From;
 
-        bitboards[(int)movingPiece] ^= fromBitboard;
-        newZobristHash ^= Zobrist.zArray[(int)movingPiece][from];
+            ulong fromBitboard = 1ul << from;
+            ulong toBitboard = 1ul << to;
 
-        allPiecesBitboard ^= fromBitboard;
-        allPiecesBitboard |= toBitboard;
+            PieceType movingPiece = move.MovingPiece;
+            PieceType capturedPiece = move.CapturedPiece;
 
-        if (!move.IsPromotion())
-        {
-            bitboards[(int)movingPiece] ^= toBitboard;
-            newZobristHash ^= Zobrist.zArray[(int)movingPiece][to];
-        }
-        else
-        {
-            switch (move.Flag) {
-                case Move.KnightPromoCaptureFlag:
-                case Move.KnightPromotionFlag:
-                    bitboards[isWhiteToMove ? (int)PieceType.WN : (int)PieceType.BN] ^= toBitboard;
-                    newZobristHash ^= Zobrist.zArray[isWhiteToMove ? (int)PieceType.WN : (int)PieceType.BN][to];
-                    break;
-                case Move.BishopPromoCaptureFlag:
-                case Move.BishopPromotionFlag:
-                    bitboards[isWhiteToMove ? (int)PieceType.WB : (int)PieceType.BB] ^= toBitboard;
-                    newZobristHash ^= Zobrist.zArray[isWhiteToMove ? (int)PieceType.WB : (int)PieceType.BB][to];
-                    break;
-                case Move.RookPromoCaptureFlag:
-                case Move.RookPromotionFlag:
-                    bitboards[isWhiteToMove ? (int)PieceType.WR : (int)PieceType.BR] ^= toBitboard;
-                    newZobristHash ^= Zobrist.zArray[isWhiteToMove ? (int)PieceType.WR : (int)PieceType.BR][to];
-                    break;
-                case Move.QueenPromoCaptureFlag:
-                case Move.QueenPromotionFlag:
-                    bitboards[isWhiteToMove ? (int)PieceType.WQ : (int)PieceType.BQ] ^= toBitboard;
-                    newZobristHash ^= Zobrist.zArray[isWhiteToMove ? (int)PieceType.WQ : (int)PieceType.BQ][to];
-                    break;
-            }
-        }
+            bool white = MoveUtility.GetPieceColour(movingPiece) == 0; // TODO: I should probably remove this and use isWhiteToMove instead
 
-        // Handle castling rights
-        if (movingPiece == PieceType.WK)
-        {
-            CWK = false;
-            CWQ = false;
-            if (prevCWK)
-            {
-                newZobristHash ^= Zobrist.zCastle[0];
-            }
-            if (prevCWQ)
-            {
-                newZobristHash ^= Zobrist.zCastle[1];
-            }
-        }
-        else if (movingPiece == PieceType.BK)
-        {
-            CBK = false;
-            CBQ = false;
-            if (prevCBK != CBK)
-            {
-                newZobristHash ^= Zobrist.zCastle[2];
-            }
-            if (prevCBQ != CBQ)
-            {
-                newZobristHash ^= Zobrist.zCastle[3];
-            }
-        }
-        else
-        {
-            switch (from)
-            {
-                case 63:
-                    CWK = false;
-                    if (prevCWK) newZobristHash ^= Zobrist.zCastle[0];
-                    break;
-                case 56:
-                    CWQ = false;
-                    if (prevCWQ) newZobristHash ^= Zobrist.zCastle[1];
-                    break;
-                case 7:
-                    CBK = false;
-                    if (prevCBK) newZobristHash ^= Zobrist.zCastle[2];
-                    break;
-                case 0:
-                    CBQ = false;
-                    if (prevCBQ) newZobristHash ^= Zobrist.zCastle[3];
-                    break;
-            }
-        } 
+            // Update the moving piece's bitboard
 
-        if (move.IsCapture())
-        {
-            numPlySincePawnMoveOrCapture = 0;
-            if (move.IsEnPassant())
+            bitboards[(int)movingPiece] ^= fromBitboard;
+            newZobristHash ^= Zobrist.zArray[(int)movingPiece][from];
+
+            allPiecesBitboard ^= fromBitboard;
+            allPiecesBitboard |= toBitboard;
+
+            if (!move.IsPromotion())
             {
-                bitboards[(int)capturedPiece] ^= isWhiteToMove ? toBitboard << 8 : toBitboard >> 8;
-                allPiecesBitboard ^= isWhiteToMove ? toBitboard << 8 : toBitboard >> 8;
-                newZobristHash ^= Zobrist.zArray[(int)capturedPiece][isWhiteToMove ? to + 8 : to - 8];
+                bitboards[(int)movingPiece] ^= toBitboard;
+                newZobristHash ^= Zobrist.zArray[(int)movingPiece][to];
             }
             else
             {
-                bitboards[(int)capturedPiece] ^= toBitboard;
-                newZobristHash ^= Zobrist.zArray[(int)capturedPiece][to];
+                switch (move.Flag) {
+                    case Move.KnightPromoCaptureFlag:
+                    case Move.KnightPromotionFlag:
+                        bitboards[isWhiteToMove ? (int)PieceType.WN : (int)PieceType.BN] ^= toBitboard;
+                        newZobristHash ^= Zobrist.zArray[isWhiteToMove ? (int)PieceType.WN : (int)PieceType.BN][to];
+                        break;
+                    case Move.BishopPromoCaptureFlag:
+                    case Move.BishopPromotionFlag:
+                        bitboards[isWhiteToMove ? (int)PieceType.WB : (int)PieceType.BB] ^= toBitboard;
+                        newZobristHash ^= Zobrist.zArray[isWhiteToMove ? (int)PieceType.WB : (int)PieceType.BB][to];
+                        break;
+                    case Move.RookPromoCaptureFlag:
+                    case Move.RookPromotionFlag:
+                        bitboards[isWhiteToMove ? (int)PieceType.WR : (int)PieceType.BR] ^= toBitboard;
+                        newZobristHash ^= Zobrist.zArray[isWhiteToMove ? (int)PieceType.WR : (int)PieceType.BR][to];
+                        break;
+                    case Move.QueenPromoCaptureFlag:
+                    case Move.QueenPromotionFlag:
+                        bitboards[isWhiteToMove ? (int)PieceType.WQ : (int)PieceType.BQ] ^= toBitboard;
+                        newZobristHash ^= Zobrist.zArray[isWhiteToMove ? (int)PieceType.WQ : (int)PieceType.BQ][to];
+                        break;
+                }
             }
 
-            switch (to)
+            // Handle castling rights
+            if (movingPiece == PieceType.WK)
             {
-                case 63:
-                    CWK = false;
-                    if (prevCWK != CWK) newZobristHash ^= Zobrist.zCastle[0];
-                    break;
-                case 56:
-                    CWQ = false;
-                    if (prevCWQ != CWQ) newZobristHash ^= Zobrist.zCastle[1];
-                    break;
-                case 7:
-                    CBK = false;
-                    if (prevCBK != CBK) newZobristHash ^= Zobrist.zCastle[2];
-                    break;
-                case 0:
-                    CBQ = false;
-                    if (prevCBQ != CBQ) newZobristHash ^= Zobrist.zCastle[3];
-                    break;
-            }
-        }
-        else if (movingPiece == PieceType.WP || movingPiece == PieceType.BP)
-        {
-            numPlySincePawnMoveOrCapture = 0;
-            if (move.IsDoublePawnPush()) epFile = (byte) (to % 8); // Record the EP file
-        }
-        else if (move.IsKingsideCastle())
-        {
-            // Update the rook bitboard
-            if (white)
-            {
-                bitboards[(int)PieceType.WR] ^= 0b101ul << 61;
-                allPiecesBitboard ^= 0b101ul << 61;
                 CWK = false;
-                // Update Zobrist Hash
-                // newZobristHash ^= Zobrist.zCastle[0]; // I would have already done this when checking if a piece moved from square 63
-                newZobristHash ^= Zobrist.zArray[(int)PieceType.WR][63]; // Remove old rook position
-                newZobristHash ^= Zobrist.zArray[(int)PieceType.WR][61]; // Add new rook position
-            }
-            else
-            {
-                bitboards[(int)PieceType.BR] ^= 0b10100000ul;
-                allPiecesBitboard ^= 0b10100000ul;
-                CBK = false;
-                // Update Zobrist Hash
-                // newZobristHash ^= Zobrist.zCastle[2];
-                newZobristHash ^= Zobrist.zArray[(int)PieceType.BR][7]; // Remove old rook position
-                newZobristHash ^= Zobrist.zArray[(int)PieceType.BR][5]; // Add new rook position
-            }
-        }
-        else if (move.IsQueensideCastle())
-        {
-            // Update the rook bitboard
-            if (white)
-            {
-                bitboards[(int)PieceType.WR] ^= 0b1001ul << 56;
-                allPiecesBitboard ^= 0b1001ul << 56;
                 CWQ = false;
-                // newZobristHash ^= Zobrist.zCastle[1];
-                newZobristHash ^= Zobrist.zArray[(int)PieceType.WR][56]; // Remove old rook position
-                newZobristHash ^= Zobrist.zArray[(int)PieceType.WR][59]; // Add new rook position
+                if (prevCWK)
+                {
+                    newZobristHash ^= Zobrist.zCastle[0];
+                }
+                if (prevCWQ)
+                {
+                    newZobristHash ^= Zobrist.zCastle[1];
+                }
+            }
+            else if (movingPiece == PieceType.BK)
+            {
+                CBK = false;
+                CBQ = false;
+                if (prevCBK != CBK)
+                {
+                    newZobristHash ^= Zobrist.zCastle[2];
+                }
+                if (prevCBQ != CBQ)
+                {
+                    newZobristHash ^= Zobrist.zCastle[3];
+                }
             }
             else
             {
-                bitboards[(int)PieceType.BR] ^= 0b1001ul;
-                allPiecesBitboard ^= 0b1001ul;
-                CBQ = false;
-                // newZobristHash ^= Zobrist.zCastle[3];
-                newZobristHash ^= Zobrist.zArray[(int)PieceType.BR][0]; // Remove old rook position
-                newZobristHash ^= Zobrist.zArray[(int)PieceType.BR][3]; // Add new rook position
+                switch (from)
+                {
+                    case 63:
+                        CWK = false;
+                        if (prevCWK) newZobristHash ^= Zobrist.zCastle[0];
+                        break;
+                    case 56:
+                        CWQ = false;
+                        if (prevCWQ) newZobristHash ^= Zobrist.zCastle[1];
+                        break;
+                    case 7:
+                        CBK = false;
+                        if (prevCBK) newZobristHash ^= Zobrist.zCastle[2];
+                        break;
+                    case 0:
+                        CBQ = false;
+                        if (prevCBQ) newZobristHash ^= Zobrist.zCastle[3];
+                        break;
+                }
+            } 
+
+            if (move.IsCapture())
+            {
+                numPlySincePawnMoveOrCapture = 0;
+                if (move.IsEnPassant())
+                {
+                    bitboards[(int)capturedPiece] ^= isWhiteToMove ? toBitboard << 8 : toBitboard >> 8;
+                    allPiecesBitboard ^= isWhiteToMove ? toBitboard << 8 : toBitboard >> 8;
+                    newZobristHash ^= Zobrist.zArray[(int)capturedPiece][isWhiteToMove ? to + 8 : to - 8];
+                }
+                else
+                {
+                    bitboards[(int)capturedPiece] ^= toBitboard;
+                    newZobristHash ^= Zobrist.zArray[(int)capturedPiece][to];
+                }
+
+                switch (to)
+                {
+                    case 63:
+                        CWK = false;
+                        if (prevCWK != CWK) newZobristHash ^= Zobrist.zCastle[0];
+                        break;
+                    case 56:
+                        CWQ = false;
+                        if (prevCWQ != CWQ) newZobristHash ^= Zobrist.zCastle[1];
+                        break;
+                    case 7:
+                        CBK = false;
+                        if (prevCBK != CBK) newZobristHash ^= Zobrist.zCastle[2];
+                        break;
+                    case 0:
+                        CBQ = false;
+                        if (prevCBQ != CBQ) newZobristHash ^= Zobrist.zCastle[3];
+                        break;
+                }
+            }
+            else if (movingPiece == PieceType.WP || movingPiece == PieceType.BP)
+            {
+                numPlySincePawnMoveOrCapture = 0;
+                if (move.IsDoublePawnPush()) epFile = (byte) (to % 8); // Record the EP file
+            }
+            else if (move.IsKingsideCastle())
+            {
+                // Update the rook bitboard
+                if (white)
+                {
+                    bitboards[(int)PieceType.WR] ^= 0b101ul << 61;
+                    allPiecesBitboard ^= 0b101ul << 61;
+                    CWK = false;
+                    // Update Zobrist Hash
+                    // newZobristHash ^= Zobrist.zCastle[0]; // I would have already done this when checking if a piece moved from square 63
+                    newZobristHash ^= Zobrist.zArray[(int)PieceType.WR][63]; // Remove old rook position
+                    newZobristHash ^= Zobrist.zArray[(int)PieceType.WR][61]; // Add new rook position
+                }
+                else
+                {
+                    bitboards[(int)PieceType.BR] ^= 0b10100000ul;
+                    allPiecesBitboard ^= 0b10100000ul;
+                    CBK = false;
+                    // Update Zobrist Hash
+                    // newZobristHash ^= Zobrist.zCastle[2];
+                    newZobristHash ^= Zobrist.zArray[(int)PieceType.BR][7]; // Remove old rook position
+                    newZobristHash ^= Zobrist.zArray[(int)PieceType.BR][5]; // Add new rook position
+                }
+            }
+            else if (move.IsQueensideCastle())
+            {
+                // Update the rook bitboard
+                if (white)
+                {
+                    bitboards[(int)PieceType.WR] ^= 0b1001ul << 56;
+                    allPiecesBitboard ^= 0b1001ul << 56;
+                    CWQ = false;
+                    // newZobristHash ^= Zobrist.zCastle[1];
+                    newZobristHash ^= Zobrist.zArray[(int)PieceType.WR][56]; // Remove old rook position
+                    newZobristHash ^= Zobrist.zArray[(int)PieceType.WR][59]; // Add new rook position
+                }
+                else
+                {
+                    bitboards[(int)PieceType.BR] ^= 0b1001ul;
+                    allPiecesBitboard ^= 0b1001ul;
+                    CBQ = false;
+                    // newZobristHash ^= Zobrist.zCastle[3];
+                    newZobristHash ^= Zobrist.zArray[(int)PieceType.BR][0]; // Remove old rook position
+                    newZobristHash ^= Zobrist.zArray[(int)PieceType.BR][3]; // Add new rook position
+                }
+            }
+
+            // XOR in the new en-passant file
+            if (epFile != 8) newZobristHash ^= Zobrist.zEnPassant[epFile];
+
+            // XOR out the old en-passant file
+            if (prevEnPasantFile != 8) {
+                newZobristHash ^= Zobrist.zEnPassant[prevEnPasantFile];
             }
         }
-
-        // XOR in the new en-passant file
-        if (epFile != 8) newZobristHash ^= Zobrist.zEnPassant[epFile];
-
 
         isWhiteToMove = !isWhiteToMove; // Toggle who's turn it is
         newZobristHash ^= Zobrist.zBlackMove;
@@ -371,10 +379,6 @@ public sealed class Board
             halfMoveCount++;
         }
         if (halfMoveCount % 2 == 0) fullMoveCount++;
-
-        if (prevEnPasantFile != 8) {
-            newZobristHash ^= Zobrist.zEnPassant[prevEnPasantFile];
-        }
 
         zobristHash = newZobristHash;
 
@@ -393,73 +397,76 @@ public sealed class Board
         StateData previousState = stateHistory.Pop();
         Move move = previousState.lastMove;
 
-        ulong fromBitboard = 1ul << move.From;
-        ulong toBitboard = 1ul << move.To;
-
-        allPiecesBitboard ^= fromBitboard | toBitboard;
-
-        // update the moving pieces bitboard
-        bitboards[(int)move.MovingPiece]^= (toBitboard & bitboards[(int)move.MovingPiece]) | fromBitboard;
-
-        switch(move.Flag)
+        if (!move.IsNullMove)
         {
-            case Move.KnightPromoCaptureFlag:
-            case Move.KnightPromotionFlag:
-                bitboards[isWhiteToMove ? (int)PieceType.BN : (int)PieceType.WN] ^= toBitboard;
-                break;
-            case Move.BishopPromoCaptureFlag:
-            case Move.BishopPromotionFlag:
-                bitboards[isWhiteToMove ? (int)PieceType.BB : (int)PieceType.WB] ^= toBitboard;
-                break;
-            case Move.RookPromoCaptureFlag:
-            case Move.RookPromotionFlag:
-                bitboards[isWhiteToMove ? (int)PieceType.BR : (int)PieceType.WR] ^= toBitboard;
-                break;
-            case Move.QueenPromoCaptureFlag:
-            case Move.QueenPromotionFlag:
-                bitboards[isWhiteToMove ? (int)PieceType.BQ : (int)PieceType.WQ] ^= toBitboard;
-                break;
-        }
+            ulong fromBitboard = 1ul << move.From;
+            ulong toBitboard = 1ul << move.To;
 
-        if (move.IsCapture())
-        {
-            if (move.IsEnPassant())
+            allPiecesBitboard ^= fromBitboard | toBitboard;
+
+            // update the moving pieces bitboard
+            bitboards[(int)move.MovingPiece]^= (toBitboard & bitboards[(int)move.MovingPiece]) | fromBitboard;
+
+            switch(move.Flag)
             {
-                bitboards[(int)move.CapturedPiece] ^= isWhiteToMove ? toBitboard >> 8 : toBitboard << 8;
-                allPiecesBitboard ^= isWhiteToMove ? toBitboard >> 8 : toBitboard << 8;
+                case Move.KnightPromoCaptureFlag:
+                case Move.KnightPromotionFlag:
+                    bitboards[isWhiteToMove ? (int)PieceType.BN : (int)PieceType.WN] ^= toBitboard;
+                    break;
+                case Move.BishopPromoCaptureFlag:
+                case Move.BishopPromotionFlag:
+                    bitboards[isWhiteToMove ? (int)PieceType.BB : (int)PieceType.WB] ^= toBitboard;
+                    break;
+                case Move.RookPromoCaptureFlag:
+                case Move.RookPromotionFlag:
+                    bitboards[isWhiteToMove ? (int)PieceType.BR : (int)PieceType.WR] ^= toBitboard;
+                    break;
+                case Move.QueenPromoCaptureFlag:
+                case Move.QueenPromotionFlag:
+                    bitboards[isWhiteToMove ? (int)PieceType.BQ : (int)PieceType.WQ] ^= toBitboard;
+                    break;
             }
-            else
+
+            if (move.IsCapture())
             {
-                bitboards[(int)move.CapturedPiece] ^= toBitboard;
-                allPiecesBitboard ^= toBitboard;
+                if (move.IsEnPassant())
+                {
+                    bitboards[(int)move.CapturedPiece] ^= isWhiteToMove ? toBitboard >> 8 : toBitboard << 8;
+                    allPiecesBitboard ^= isWhiteToMove ? toBitboard >> 8 : toBitboard << 8;
+                }
+                else
+                {
+                    bitboards[(int)move.CapturedPiece] ^= toBitboard;
+                    allPiecesBitboard ^= toBitboard;
+                }
             }
-        }
-        else if (move.IsKingsideCastle())
-        {
-            // Update the rook bitboard
-            if (isWhiteToMove)
+            else if (move.IsKingsideCastle())
             {
-                bitboards[(int)PieceType.BR] ^= 0b10100000ul;
-                allPiecesBitboard ^= 0b10100000ul;
+                // Update the rook bitboard
+                if (isWhiteToMove)
+                {
+                    bitboards[(int)PieceType.BR] ^= 0b10100000ul;
+                    allPiecesBitboard ^= 0b10100000ul;
+                }
+                else
+                {
+                    bitboards[(int)PieceType.WR] ^= 0b101ul << 61;
+                    allPiecesBitboard ^= 0b101ul << 61;
+                }
             }
-            else
+            else if (move.IsQueensideCastle())
             {
-                bitboards[(int)PieceType.WR] ^= 0b101ul << 61;
-                allPiecesBitboard ^= 0b101ul << 61;
-            }
-        }
-        else if (move.IsQueensideCastle())
-        {
-            // Update the rook bitboard
-            if (isWhiteToMove)
-            {
-                bitboards[(int)PieceType.BR] ^= 0b1001ul;
-                allPiecesBitboard ^= 0b1001ul;
-            }
-            else
-            {
-                bitboards[(int)PieceType.WR] ^= 0b1001ul << 56;
-                allPiecesBitboard ^= 0b1001ul << 56;
+                // Update the rook bitboard
+                if (isWhiteToMove)
+                {
+                    bitboards[(int)PieceType.BR] ^= 0b1001ul;
+                    allPiecesBitboard ^= 0b1001ul;
+                }
+                else
+                {
+                    bitboards[(int)PieceType.WR] ^= 0b1001ul << 56;
+                    allPiecesBitboard ^= 0b1001ul << 56;
+                }
             }
         }
 

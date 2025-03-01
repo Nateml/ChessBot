@@ -76,6 +76,14 @@ public class Move
         }
     }
 
+    public bool IsNullMove
+    {
+        get
+        {
+            return From == 0 && To == 0;
+        }
+    }
+
     /// <summary>
     /// Returns true if this move captures a piece.
     /// </summary>
@@ -238,5 +246,10 @@ public class Move
         hasCachedScore = true;
 
         return score;
+    }
+
+    public static Move MakeNullMove()
+    {
+        return new Move(0, 0, PieceType.EMPTY, PieceType.EMPTY, 0);
     }
 }

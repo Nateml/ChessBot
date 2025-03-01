@@ -10,7 +10,7 @@ public static class Evaluation
 
     public const double PositionalWeight = 0.4;
     public const int KingInCheckPenalty = 60;
-    public const int CastlingBonus = 20;
+    public const int CastlingBonus = 5; // This probably needs to be very small because otherwise it would be better not to castle
     public const int BishopPairBonus = 40;
     public const int RookOnOpenFileBonus = 20;
     public const int RookOnSemiOpenFileBonus = 10;
