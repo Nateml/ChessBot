@@ -34,6 +34,8 @@ public class MyBot : IChessBot
 
     private EvaluationManager evalManager;
 
+    private Move? bestMove;
+
     private Stopwatch clock = new Stopwatch();
 
     public MyBot()
@@ -48,7 +50,7 @@ public class MyBot : IChessBot
         killerMoves.Clear();
     }
 
-    public Move GetBestMove(Board board, int timeLeft, bool fixedTime = false, bool printToConsole = true)
+    public Move GetBestMove(Board board, int timeLeft, CancellationToken cancellationToken, bool fixedTime = false, bool printToConsole = true)
     {
         // Play a book move if we can
         if (!isOutOfBook)
@@ -80,14 +82,14 @@ public class MyBot : IChessBot
         int alpha = -100000;
         int beta = 100000;
         int retryMultiplier = 0;
-        for (byte distance = 1; distance < MaxDistance && !OutOfTime() && !exitSearch;)
+        for (byte distance = 1; distance < MaxDistance && !OutOfTime() && !exitSearch && !cancellationToken.IsCancellationRequested;)
         {
             Stopwatch stopwatch = new();
             stopwatch.Start();
 
-            (Move newMove, int bestScore) = NegamaxAtRoot(board, distance, alpha, beta);
+            (Move newMove, int bestScore) = NegamaxAtRoot(board, distance, alpha, beta, cancellationToken);
 
-            if (OutOfTime()) break;
+            if (OutOfTime() || cancellationToken.IsCancellationRequested) break;
 
             stopwatch.Stop();
 
@@ -135,7 +137,7 @@ public class MyBot : IChessBot
             retryMultiplier = 0;
 
             // Adjust the aspiration window
-            alpha = bestScore - 30;
+            alpha = bestScore - 50;
             beta = bestScore + 30;
 
             distance++;
@@ -146,7 +148,7 @@ public class MyBot : IChessBot
         return priorityMove;
     }
 
-    private (Move, int) NegamaxAtRoot(Board board, byte depth, int alpha, int beta)
+    private (Move, int) NegamaxAtRoot(Board board, byte depth, int alpha, int beta, CancellationToken cancellationToken)
     {
         nodesReached = 0;
         transpositions = 0;
@@ -163,7 +165,7 @@ public class MyBot : IChessBot
         Move bestMove = moves[0];
         int bestScore = -1000000;
 
-        for (int i = 0; i < moves.Length && !OutOfTime(); i++)
+        for (int i = 0; i < moves.Length && !OutOfTime() && !cancellationToken.IsCancellationRequested; i++)
         {
             nodesReached++;
             PickMoveRoot(moves, i, board);
@@ -171,7 +173,7 @@ public class MyBot : IChessBot
 
             board.MakeMove(move);
             evalManager.Update(move);
-            int score = -Negamax(board, (byte)(depth-1), 1, -beta, -alpha, board.IsWhiteToMove ? 1 : -1);
+            int score = -Negamax(board, (byte)(depth-1), 1, -beta, -alpha, board.IsWhiteToMove ? 1 : -1, cancellationToken);
             board.UnmakeMove();
             evalManager.Undo();
 
@@ -191,9 +193,9 @@ public class MyBot : IChessBot
         return (bestMove, bestScore);
     }
 
-    private int Negamax(Board board, byte depth, int distanceFromRoot, int alpha, int beta, int colour)
+    private int Negamax(Board board, byte depth, int distanceFromRoot, int alpha, int beta, int colour, CancellationToken cancellationToken)
     {
-        if (OutOfTime()) return 0;
+        if (OutOfTime() || cancellationToken.IsCancellationRequested) return 0;
         //if (UCI.IsStopRequested()) return 0;
 
         nodesReached++;
@@ -299,17 +301,17 @@ public class MyBot : IChessBot
                 // We make the assumption that because our move ordering is good (hopefully), that moves further down in the list are likely bad,
                 //      so we search them at a reduced depth with a smaller aspiration window.
                 const int reduceDepth = 1;
-                val = -Negamax(board, (byte)(depth-1-reduceDepth), distanceFromRoot+1, -alpha-1, -alpha, -colour);
+                val = -Negamax(board, (byte)(depth-1-reduceDepth), distanceFromRoot+1, -alpha-1, -alpha, -colour, cancellationToken);
 
                 // If we get an evaluation better than we expected, we have to research the node with the full depth
                 if (val > alpha)
                 {
-                    val = -Negamax(board, (byte)(depth-1), distanceFromRoot+1, -beta, -alpha, -colour);
+                    val = -Negamax(board, (byte)(depth-1), distanceFromRoot+1, -beta, -alpha, -colour, cancellationToken);
                 }
             }
             else
             {
-                val = -Negamax(board, (byte)(depth-1), distanceFromRoot+1, -beta, -alpha, -colour);
+                val = -Negamax(board, (byte)(depth-1), distanceFromRoot+1, -beta, -alpha, -colour, cancellationToken);
             }
 
             //val = -Negamax(board, depth-1, distanceFromRoot+1, -beta, -alpha, -colour);
@@ -317,7 +319,7 @@ public class MyBot : IChessBot
             board.UnmakeMove();
             evalManager.Undo();
 
-            if (OutOfTime()) return 0; // Exit early if we are out of time
+            if (OutOfTime() || cancellationToken.IsCancellationRequested) return 0; // Exit early if we are out of time
 
             // Cut node (fail high)
             if (val >= beta) 
@@ -536,5 +538,7 @@ public class MyBot : IChessBot
 
         return pv;
     }
+
+    public Move? BestMove { get { return bestMove; }}
 
 }

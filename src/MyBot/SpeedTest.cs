@@ -14,8 +14,9 @@ public class SpeedTest
     {
         Board board = new(position);
         System.Diagnostics.Stopwatch stopwatch = new();
+        CancellationToken token = new(false);
         stopwatch.Start();
-        bot.GetBestMove(board, time, true, true);
+        bot.GetBestMove(board, time, token, true);
         stopwatch.Stop();
         Console.WriteLine("Done.");
         Console.WriteLine("Time taken: " + stopwatch.ElapsedMilliseconds + "ms");

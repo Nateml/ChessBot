@@ -10,6 +10,9 @@ class UCI
     private static EvaluationManager evalManager = new(board);
 
     private static bool hasStopBeenRequested = false;
+    private static Thread? searchThread; // Thread for running the search
+    private static CancellationTokenSource? cts; // Token for cancelling the search
+    private static bool isPondering = false;
 
     public static void Main(string[] args)
     {
@@ -30,7 +33,11 @@ class UCI
         }).Start();
         */
 
-        UCICommunication();
+        Task.Run(() => UCICommunication());
+
+        // Keep the main thread alive
+        while (true) Thread.Sleep(1000);
+
     }
 
     public static void UCICommunication()
@@ -40,6 +47,15 @@ class UCI
             string? input = Console.ReadLine();
 
             if (input == null) continue;
+
+            // Any input should stop the engine from pondering
+            if (isPondering && searchThread != null)
+            {
+                cts?.Cancel();
+                searchThread.Join();
+                isPondering = false;
+            }
+
             if (input == "uci") InputUCI();
             if (input.StartsWith("setoption")) InputSetOption(input);
             if (input == "isready") InputIsReady();
@@ -58,6 +74,7 @@ class UCI
             if (input == "eval static") InputEvalStatic();
             if (input == "undo move") InputUndoMove();
             if (input == "quit") InputQuit();
+            if (input == "stop") InputStop();
         }
     }
 
@@ -210,51 +227,78 @@ class UCI
 
     static void InputGo(string input)
     {
-        hasStopBeenRequested = false;
+        cts = new();
+        CancellationToken token = cts.Token;
 
-        if (input.StartsWith("go perft"))
+        if (searchThread != null && searchThread.IsAlive)
         {
-            if (input.Contains("capturesonly"))
+            Console.WriteLine("info string Search already in progress.");
+            return;
+        }
+
+        searchThread = new Thread(() => {
+            if (input.StartsWith("go perft"))
             {
-                input = input[3..];
-                int depth = int.Parse(input.Split(" ")[1]);
-                int nodes = Perft.DividePerftTest(board, depth, true, true);
-                Console.WriteLine("Nodes visitied: " + nodes);
+                if (input.Contains("capturesonly"))
+                {
+                    input = input[3..];
+                    int depth = int.Parse(input.Split(" ")[1]);
+                    int nodes = Perft.DividePerftTest(board, depth, true, true);
+                    Console.WriteLine("Nodes visitied: " + nodes);
+                }
+                else
+                {
+                    input = input[3..];
+                    int depth = int.Parse(input.Split(" ")[1]);
+                    int nodes = Perft.DividePerftTest(board, depth);
+                    Console.WriteLine("Nodes visitied: " + nodes);
+                }
+            }
+            else if (input.StartsWith("go infinite"))
+            {
+                Move bestMove = bot.GetBestMove(board, int.MaxValue, token);
+                Console.WriteLine("bestmove " + bestMove.ToString());
+            }
+            else if (input.StartsWith("go ponder"))
+            {
+                isPondering = true;
+                Move bestMove = bot.GetBestMove(board, int.MaxValue, token, false);
             }
             else
             {
-                input = input[3..];
-                int depth = int.Parse(input.Split(" ")[1]);
-                int nodes = Perft.DividePerftTest(board, depth);
-                Console.WriteLine("Nodes visitied: " + nodes);
-            }
-        }
-        else if (input.StartsWith("go infinite"))
-        {
-            Move bestMove = bot.GetBestMove(board, int.MaxValue);
-            Console.WriteLine("bestmove " + bestMove.ToString());
-        }
-        else
-        {
-            int timeLeft = 300000; // Assume 5 minute game
-            if (board.IsWhiteToMove)
-            {
-                if (input.Contains("wtime"))
+                int timeLeft = 300000; // Assume 5 minute game
+                if (board.IsWhiteToMove)
                 {
-                    string[] words = input[(input.IndexOf("wtime") + 5)..].Split(" ");
-                    timeLeft = int.Parse(words[1].Trim());
+                    if (input.Contains("wtime"))
+                    {
+                        string[] words = input[(input.IndexOf("wtime") + 5)..].Split(" ");
+                        timeLeft = int.Parse(words[1].Trim());
+                    }
                 }
-            }
-            else
-            {
-                if (input.Contains("btime"))
+                else
                 {
-                    string[] words = input[(input.IndexOf("btime") + 5)..].Split(" ");
-                    timeLeft = int.Parse(words[1].Trim());
+                    if (input.Contains("btime"))
+                    {
+                        string[] words = input[(input.IndexOf("btime") + 5)..].Split(" ");
+                        timeLeft = int.Parse(words[1].Trim());
+                    }
                 }
+                Move bestMove = bot.GetBestMove(board, timeLeft, token, false, true);
+                Console.WriteLine("bestmove " + bestMove.ToString());
             }
-            Move bestMove = bot.GetBestMove(board, timeLeft, false, true);
-            Console.WriteLine("bestmove " + bestMove.ToString());
+        });
+
+        searchThread.Start();
+
+    }
+
+    static void InputStop()
+    {
+        cts?.Cancel();   
+
+        if (searchThread != null && searchThread.IsAlive)
+        {
+            searchThread.Join(); // Wait for the search to finish
         }
     }
 
@@ -277,27 +321,6 @@ class UCI
     static void InputQuit()
     {
         Environment.Exit(0);
-    }
-
-    public static bool IsStopRequested()
-    {
-        return hasStopBeenRequested;
-        /*
-        if (hasStopBeenRequested) return true;
-        if (!Console.IsInputRedirected) return false;
-        string? input = Console.ReadLine();
-        if (input == null) return false;
-        Console.WriteLine("input: " + input);
-        if (input.Contains("stop")) 
-        {
-            hasStopBeenRequested = true;
-            return true;
-        }
-        else
-        {
-            return false;
-        }
-        */
     }
 
 }
