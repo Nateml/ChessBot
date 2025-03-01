@@ -17,10 +17,10 @@ public class TranspositionTable
     public TranspositionTable(int size = 1 << 20)
     {
         // Make sure size is a power of 2
-        if ((size & (size - 1)) != 0)
-        {
-            throw new InvalidEnumArgumentException("Transposition table size must be a power of 2.");
-        }
+        //if ((size & (size - 1)) != 0)
+        //{
+            //throw new InvalidEnumArgumentException("Transposition table size must be a power of 2.");
+        //}
 
         this.size = size;
         table = new TranspositionData[size];
@@ -109,6 +109,7 @@ public class TranspositionTable
 
     private int TableIndex(ulong hash)
     {
-        return (int) (hash & ((ulong)size-1));
+        // return (int) (hash & ((ulong)size-1));
+        return (int) (hash % (ulong)size);
     }
 }
