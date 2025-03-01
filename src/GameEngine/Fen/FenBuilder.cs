@@ -159,11 +159,11 @@ class FenBuilder
         {
             if (board.IsWhiteToMove)
             {
-                fen += ((Square) (MoveGenData.RankMasks[4] & MoveGenData.FileMasks[board.EpFile])).ToString().ToLower();
+                fen += ((Square) BitboardUtility.IndexOfLSB(MoveGenData.RankMasks[4] & MoveGenData.FileMasks[board.EpFile])).ToString().ToLower();
             }
             else
             {
-                fen += ((Square) (MoveGenData.RankMasks[3] & MoveGenData.FileMasks[board.EpFile])).ToString().ToLower();
+                fen += ((Square) BitboardUtility.IndexOfLSB(MoveGenData.RankMasks[3] & MoveGenData.FileMasks[board.EpFile])).ToString().ToLower();
             }
         }
         else
