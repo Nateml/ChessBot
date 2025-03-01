@@ -13,7 +13,7 @@ public class MyBot : IChessBot
 
     private readonly byte MaxDistance = 50;
 
-    private readonly int QuiscenceDepth = 100;
+    private readonly int QuiscenceDepth = 50;
 
     private int transpositions = 0;
 
@@ -200,30 +200,26 @@ public class MyBot : IChessBot
 
         nodesReached++;
 
-        /*
-        if (board.RepetitionHistory.Contains(board.ZobristHash))
+        // Check for 3-fold repetition and 50 move rule
+        // Draws rarely happen before 4 ply since an irreverisble move,
+        // so we can save some time by not checking before that
+        if (board.NumPlySincePawnMoveOrCapture >= 4)
         {
-            // Detect draw by three-fold repetion.
-            // This only checks if the position has been reached once before.
-            // Implementation taken from Sebastian Lague's video "Coding Adventure: Making a Better Chess Bot"
-            // Note from him: With this approach, the program might repeat a losing move 
-            // (where the opponent missed the winning response before) because it thinks its already a draw.
-            // On the other hand, if we only return a draw score when the position has already occured twice,
-            // the program might often choose to repeat a position a single time before making a different move.
-            // Note from me: With this approach, the implementation is also a whole lot easier because I can just
-            // use a hash set of zobrist keys for a quick lookup, instead of having to use a different data structure
-            // which allows duplicates...
-            // One idea is to use an integer array with zobrist keys as a lookup index, wherein we just increment the
-            // appropriate element every time we stumble upon it. However, there are bound to be collisions (there are
-            // way more zobrist keys than I can fit into a reasonably sized array)...
-            return 0;
+            if (board.NumPlySincePawnMoveOrCapture >= 100) // 50 move rule
+            {
+                return 0; // Draw
+            }
+
+            // Check for 3-fold repetition
+
+            int repetitions = CountRepetitions(board.History, board.ZobristHash, board.NumPlySincePawnMoveOrCapture);
+            // If we have repeated the position three times, or if we have repeated the position twice and we are two ply away from the root
+            // then we return a draw.
+            if (repetitions >= 3 || (repetitions >= 2 && distanceFromRoot > 2)) 
+            {
+                return 0; // Draw
+            }
         }
-        else if (board.NumPlySincePawnMoveOrCapture >= 100)
-        {
-            // Check 50 move rule
-            return 0;
-        }
-        */
 
         // Store the initial alpha to check node type later on
         int originalAlpha = alpha;
@@ -537,6 +533,36 @@ public class MyBot : IChessBot
         }
 
         return pv;
+    }
+
+    /// <summary>
+    /// Used to check for 3-fold repetition.
+    /// Taken from https://groups.google.com/g/rec.games.chess.computer/c/ft82tUpHJn0/m/FJNPi4KWjRYJ
+    /// </summary>
+    private static int CountRepetitions(LinkedList<ulong> hashHistory, ulong currentHash, int numPlySincePawnMoveOrCapture)
+    {
+        int count = 0;
+
+        // Iterate backwards through the history
+        LinkedListNode<ulong>? node = hashHistory.Last;
+        while (numPlySincePawnMoveOrCapture > 0 && node != null)
+        {
+            if (node.Value == currentHash)
+            {
+                count++;
+            }
+            if (count == 2) return count;
+
+            // I have to iterate two nodes at a time because 
+            // I want to always look at it from the perspective of the player
+            // who made the last move
+            node = node.Previous;
+            if (node == null) break;
+            node = node.Previous;
+
+            numPlySincePawnMoveOrCapture -= 2;
+        }
+        return count;
     }
 
     public Move? BestMove { get { return bestMove; }}

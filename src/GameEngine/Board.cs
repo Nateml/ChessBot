@@ -13,7 +13,8 @@ public sealed class Board
 
     private ulong allPiecesBitboard = 0ul;
 
-    private HashSet<ulong> repetitionHistory = new();
+    // The following two fields are used for threefold repetition detection
+    private LinkedList<ulong> history = new();
 
     private int numPlySincePawnMoveOrCapture = 0;
 
@@ -107,30 +108,9 @@ public sealed class Board
     /// </summary>
     public void MakeMove(Move move)
     {
-
-        // Because I am getting some bugs, I am going to do a quick check if there is a piece on the from square
-        if ((bitboards[(int)move.MovingPiece] & (1ul << move.From)) == 0)
-        {
-            // Print out some debug information
-            Console.WriteLine("From square: " + move.From);
-            Console.WriteLine("To square: " + move.To);
-            Console.WriteLine("Moving piece: " + move.MovingPiece);
-            Console.WriteLine("Captured piece: " + move.CapturedPiece);
-            Console.WriteLine("Flag: " + move.Flag);
-            Console.WriteLine("Is capture: " + move.IsCapture());
-            Console.WriteLine("Is en passant: " + move.IsEnPassant());
-            Console.WriteLine("Is promotion: " + move.IsPromotion());
-            Console.WriteLine("Is kingside castle: " + move.IsKingsideCastle());
-            Console.WriteLine("Is queenside castle: " + move.IsQueensideCastle());
-            Console.WriteLine("Is double pawn push: " + move.IsDoublePawnPush());
-            Console.WriteLine("Is quiet move: " + move.IsQuietMove());
-            Console.WriteLine("Encoded move: " + move.EncodedMove);
-            Console.WriteLine("Move: " + move);
-            BitboardUtility.PrintBitboard(bitboards[(int)move.MovingPiece]);
-            throw new Exception("No piece on the from square");
-        }
-
         //repetitionHistory.Add(zobristHash);
+
+        history.AddLast(zobristHash);
 
         // Push state data to stack before making the move
         stateHistory.Push(new StateData(move, CWK, CWQ, CBK, CBQ, epFile, fullMoveCount, halfMoveCount, zobristHash, numPlySincePawnMoveOrCapture));
@@ -364,6 +344,7 @@ public sealed class Board
     public void UnmakeMove()
     {
         //repetitionHistory.Remove(zobristHash);
+        history.RemoveLast();
 
         StateData previousState = stateHistory.Pop();
         Move move = previousState.lastMove;
@@ -492,10 +473,7 @@ public sealed class Board
         get { return zobristHash; }
     }
 
-    /// <summary>
-    /// A HashSet of all the positions, represented by zobrist keys, which have appeared in the board's history.
-    /// </summary>
-    public HashSet<ulong> RepetitionHistory => repetitionHistory;
+    public LinkedList<ulong> History => history;
 
     public int WhiteKingSquare
     {
