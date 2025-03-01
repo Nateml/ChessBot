@@ -91,3 +91,40 @@ jobs:
           files: artifacts/*/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy:
+    name: Deploy Engine to lichess-bot
+    needs: release  # Runs after the release job
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout lichess-bot repository
+        uses: actions/checkout@v4
+        with:
+          repository: Nateml/lichess-bot
+          token: ${{ secrets.LICHESS_BOT_PAT }}
+          path: lichess-bot
+
+      - name: Download latest build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: chess-engine-linux-x64
+          path: lichess-bot/engines/ChessBot/
+
+      - name: Unzip the artifact
+        run: |
+          cd lichess-bot/engines/ChessBot/
+          unzip -o chess-engine-linux-x64.zip # -o to overwrite existing files
+          rm chess-engine-linux-x64.zip # Remove the zip file
+
+      - name: Verify files
+        run: ls -R lichess-bot/engines/ChessBot/
+
+      - name: Commit and Push to lichess-bot
+        run: |
+          cd lichess-bot
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git add engines/
+          git commit -m "Updated Chess Engine to latest version"
+          git push origin master
