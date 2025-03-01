@@ -215,7 +215,7 @@ public class MyBot : IChessBot
             int repetitions = CountRepetitions(board.History, board.ZobristHash, board.NumPlySincePawnMoveOrCapture);
             // If we have repeated the position three times, or if we have repeated the position twice and we are two ply away from the root
             // then we return a draw.
-            if (repetitions >= 3 || (repetitions >= 2 && distanceFromRoot > 2)) 
+            if (repetitions >= 2 || (repetitions >= 1 && distanceFromRoot > 2)) 
             {
                 return 0; // Draw
             }
@@ -549,14 +549,24 @@ public class MyBot : IChessBot
     /// Used to check for 3-fold repetition.
     /// Taken from https://groups.google.com/g/rec.games.chess.computer/c/ft82tUpHJn0/m/FJNPi4KWjRYJ
     /// </summary>
-    private static int CountRepetitions(LinkedList<ulong> hashHistory, ulong currentHash, int numPlySincePawnMoveOrCapture)
+    public static int CountRepetitions(LinkedList<ulong> hashHistory, ulong currentHash, int numPlySincePawnMoveOrCapture, bool debug = false)
     {
         int count = 0;
 
         // Iterate backwards through the history
-        LinkedListNode<ulong>? node = hashHistory.Last;
-        while (numPlySincePawnMoveOrCapture > 0 && node != null)
+        LinkedListNode<ulong>? node = hashHistory.Last!.Previous;
+        if (debug)
         {
+            Console.WriteLine("Current hash: " + currentHash);
+        }
+        while (numPlySincePawnMoveOrCapture >= 0 && node != null)
+        {
+            if (debug)
+            {
+                Console.WriteLine("Num ply since pawn move or capture: " + numPlySincePawnMoveOrCapture);
+                Console.WriteLine("Node hash: " + node.Value);
+                Console.WriteLine("Match: " + (node.Value == currentHash));
+            }
             if (node.Value == currentHash)
             {
                 count++;
