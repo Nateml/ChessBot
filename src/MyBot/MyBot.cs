@@ -137,7 +137,7 @@ public class MyBot : IChessBot
             retryMultiplier = 0;
 
             // Adjust the aspiration window
-            alpha = bestScore - 50;
+            alpha = bestScore - 30;
             beta = bestScore + 30;
 
             distance++;
@@ -267,6 +267,15 @@ public class MyBot : IChessBot
             return Quiescence(board, QuiscenceDepth, distanceFromRoot+1, alpha, beta, colour);
         }
 
+        // Null Move Pruning
+        if (depth >= 5 && !board.IsKingInCheck(board.IsWhiteToMove) && !board.IsKingInCheck(!board.IsWhiteToMove))
+        {
+            const int R = 3;
+            board.MakeNullMove();
+            int val = -Negamax(board, (byte)(depth-1-R), distanceFromRoot+1, -beta, -beta+1, -colour, cancellationToken);
+            board.UnmakeNullMove();
+            if (val >= beta) return val;
+        }
 
         Move[] moves = board.GetLegalMoves();
 
@@ -284,6 +293,7 @@ public class MyBot : IChessBot
         int bestScore = -1000001;
         for (int i = 0; i < moves.Length; i++)
         {
+
             PickMove(moves, i, board, distanceFromRoot, bestMove);
             Move move = moves[i];
 
@@ -292,7 +302,7 @@ public class MyBot : IChessBot
 
             int val;
 
-            if (i > 8 && depth >= 3 && !move.IsCapture())
+            if (i > 5 && depth >= 3 && !move.IsCapture())
             {
                 // We make the assumption that because our move ordering is good (hopefully), that moves further down in the list are likely bad,
                 //      so we search them at a reduced depth with a smaller aspiration window.

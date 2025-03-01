@@ -102,6 +102,50 @@ public sealed class Board
         zobristHash = Zobrist.GetZobristHash(this);
     }
 
+    public void MakeNullMove()
+    {
+        // This is just like "passing the turn"
+        // We just toggle the side to move and update the zobrist hash
+        // Also get rid of the en passant file and increment the move count
+        history.AddLast(zobristHash);
+
+        numPlySincePawnMoveOrCapture++;
+
+        if (halfMoveCount != 1 || ((halfMoveCount == 1) && IsWhiteToMove))
+        {
+            halfMoveCount++;
+        }
+        if (halfMoveCount % 2 == 0) fullMoveCount++;
+
+        // I am not going to bother with en passant right now
+        // because its a pain to undo this...
+        // if (epFile != 8)
+        // {
+        //     zobristHash ^= Zobrist.zEnPassant[epFile];
+        //     epFile = 8;
+        // }
+
+        isWhiteToMove = !isWhiteToMove;
+        zobristHash ^= Zobrist.zBlackMove;
+        listeners.ForEach(listener => listener.OnBoardStateChange());
+    }
+
+    public void UnmakeNullMove()
+    {
+        history.RemoveLast();
+        numPlySincePawnMoveOrCapture--;
+
+        if (halfMoveCount != 1 || ((halfMoveCount == 1) && IsWhiteToMove))
+        {
+            halfMoveCount--;
+        }
+        if (halfMoveCount % 2 == 0) fullMoveCount--;
+
+        isWhiteToMove = !isWhiteToMove;
+        zobristHash ^= Zobrist.zBlackMove;
+        listeners.ForEach(listener => listener.OnBoardStateChange());
+    }
+
     /// <summary>
     /// Makes a given move, updates the appropriate bitboards and other state information.
     /// Notifies listeners of a state change.
