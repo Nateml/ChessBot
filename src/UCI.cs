@@ -75,6 +75,7 @@ class UCI
             if (input == "undo move") InputUndoMove();
             if (input == "quit") InputQuit();
             if (input == "stop") InputStop();
+            if (input.StartsWith("debug")) InputDebug(input);
         }
     }
 
@@ -83,6 +84,15 @@ class UCI
         Console.WriteLine("id name " + EngineName);
         Console.WriteLine("id author Nathan Macdonald");
         Console.WriteLine("uciok");
+    }
+
+    static void InputDebug(String input)
+    {
+        if (input == "debug repetitions")
+        {
+            Console.WriteLine("Num ply since pawn move or capture: " + board.NumPlySincePawnMoveOrCapture);
+            Console.WriteLine("Repetitions: " + MyBot.CountRepetitions(board.History, board.ZobristHash, board.NumPlySincePawnMoveOrCapture, true));
+        }
     }
 
     static void InputSpeedTest(String input)
