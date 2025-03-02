@@ -16,7 +16,7 @@ public sealed class Board
     // The following two fields are used for threefold repetition detection
     private readonly LinkedList<ulong> history = new();
 
-    private int numPlySincePawnMoveOrCapture = 0;
+    private int numPlySincePawnMoveOrCapture;
 
     private byte epFile; 
     private bool CWK, CWQ, CBQ, CBK;
@@ -41,8 +41,7 @@ public sealed class Board
 
     private Stack<StateData> stateHistory = new();
 
-    public int fullMoveCount;
-    public int halfMoveCount;
+    private double fullMoveCount;
 
     public MoveGen moveGen;
 
@@ -60,8 +59,8 @@ public sealed class Board
     {
         bitboards[12] = ulong.MaxValue; // sentinal value
         listeners = new();
-        halfMoveCount = 0;
         fullMoveCount = 0;
+        numPlySincePawnMoveOrCapture = 0;
         LoadPositionFromFen(fen);
         moveGen = new MoveGen(this);
     }
@@ -94,57 +93,12 @@ public sealed class Board
         CBK = fenParser.cbk;
         CBQ = fenParser.cbq;
 
-        halfMoveCount = fenParser.halfMoveCount;
+        numPlySincePawnMoveOrCapture = fenParser.halfMoveCount;
         fullMoveCount = fenParser.fullMoveCount;
 
         isWhiteToMove = fenParser.isWhiteToMove;
 
         zobristHash = Zobrist.GetZobristHash(this);
-    }
-
-    public void MakeNullMove()
-    {
-        // This is just like "passing the turn"
-        // We just toggle the side to move and update the zobrist hash
-        // Also get rid of the en passant file and increment the move count
-        history.AddLast(zobristHash);
-
-        numPlySincePawnMoveOrCapture++;
-
-        isWhiteToMove = !isWhiteToMove;
-
-        if (halfMoveCount != 1 || ((halfMoveCount == 1) && IsWhiteToMove))
-        {
-            halfMoveCount++;
-        }
-        if (halfMoveCount % 2 == 0) fullMoveCount++;
-
-        // I am not going to bother with en passant right now
-        // because its a pain to undo this...
-        // if (epFile != 8)
-        // {
-        //     zobristHash ^= Zobrist.zEnPassant[epFile];
-        //     epFile = 8;
-        // }
-        zobristHash ^= Zobrist.zBlackMove;
-        listeners.ForEach(listener => listener.OnBoardStateChange());
-    }
-
-    public void UnmakeNullMove()
-    {
-        history.RemoveLast();
-        numPlySincePawnMoveOrCapture--;
-
-        if (halfMoveCount != 1 || ((halfMoveCount == 1) && IsWhiteToMove))
-        {
-            halfMoveCount--;
-        }
-        if (halfMoveCount % 2 == 0) fullMoveCount--;
-
-        isWhiteToMove = !isWhiteToMove;
-
-        zobristHash ^= Zobrist.zBlackMove;
-        listeners.ForEach(listener => listener.OnBoardStateChange());
     }
 
     /// <summary>
@@ -157,7 +111,7 @@ public sealed class Board
         history.AddLast(zobristHash);
 
         // Push state data to stack before making the move
-        stateHistory.Push(new StateData(move, CWK, CWQ, CBK, CBQ, epFile, fullMoveCount, halfMoveCount, zobristHash, numPlySincePawnMoveOrCapture));
+        stateHistory.Push(new StateData(move, CWK, CWQ, CBK, CBQ, epFile, fullMoveCount, zobristHash, numPlySincePawnMoveOrCapture));
 
         ulong newZobristHash = zobristHash;
 
@@ -171,6 +125,13 @@ public sealed class Board
         prevEnPasantFile = epFile;
         // Clear en passant file
         epFile = 8;
+
+        // Update turn counter information
+        if (numPlySincePawnMoveOrCapture != 1 || ((numPlySincePawnMoveOrCapture == 1) && !IsWhiteToMove))
+        {
+            numPlySincePawnMoveOrCapture++; // I will reset this later on if a pawn move or capture is made
+        }
+        fullMoveCount += 0.5;
 
         if (!move.IsNullMove)
         {
@@ -373,13 +334,6 @@ public sealed class Board
         isWhiteToMove = !isWhiteToMove; // Toggle who's turn it is
         newZobristHash ^= Zobrist.zBlackMove;
 
-        // Update state information
-        if (halfMoveCount != 1 || ((halfMoveCount == 1) && IsWhiteToMove))
-        {
-            halfMoveCount++;
-        }
-        if (halfMoveCount % 2 == 0) fullMoveCount++;
-
         zobristHash = newZobristHash;
 
         // Clear cached data
@@ -480,7 +434,6 @@ public sealed class Board
         CBK = previousState.CBK;
         CBQ = previousState.CBQ;
         epFile = previousState.epFile;
-        halfMoveCount = previousState.halfMoveCount;
         fullMoveCount = previousState.fullMoveCount;
         zobristHash = previousState.zobristHash;
         numPlySincePawnMoveOrCapture = previousState.numPlySincePawnMoveOrCapture;
@@ -921,6 +874,17 @@ public sealed class Board
         listeners.Add(listener);
     }
 
-    public int NumPlyPlayed => stateHistory.Count;
+    public int NumPlyPlayed {
+        get {
+            return (int) (fullMoveCount * 2);
+        }
+    }
+
+    public int FullMoveCount {
+        get {
+            // Round down to the nearest whole number
+            return (int) fullMoveCount;
+        }
+    }
 
 }

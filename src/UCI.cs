@@ -93,6 +93,11 @@ class UCI
             Console.WriteLine("Num ply since pawn move or capture: " + board.NumPlySincePawnMoveOrCapture);
             Console.WriteLine("Repetitions: " + MyBot.CountRepetitions(board.History, board.ZobristHash, board.NumPlySincePawnMoveOrCapture, true));
         }
+        else if(input == "debug ply")
+        {
+            Console.WriteLine("Ply: " + board.NumPlyPlayed);
+            Console.WriteLine("Ply since pawn move or capture: " + board.NumPlySincePawnMoveOrCapture);
+        }
     }
 
     static void InputSpeedTest(String input)

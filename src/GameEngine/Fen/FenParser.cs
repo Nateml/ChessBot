@@ -19,7 +19,8 @@ class FenParser
 
     public readonly bool isWhiteToMove, cwk, cwq, cbk, cbq;
     public readonly byte epFile;
-    public readonly int halfMoveCount, fullMoveCount;
+    public readonly int halfMoveCount;
+    public readonly double fullMoveCount;
 
     public FenParser(string fen)
     {
@@ -142,8 +143,13 @@ class FenParser
             _ => throw new BadFenStringException("Invalid en passant file."),
         };
 
-        fullMoveCount = int.Parse(fields[4]);
-        halfMoveCount = int.Parse(fields[5]);
+        halfMoveCount = int.Parse(fields[4]);
+        fullMoveCount = int.Parse(fields[5]);
+        // If it is black to move then we need to increment the full move count by 0.5
+        if (!isWhiteToMove)
+        {
+            fullMoveCount += 0.5;
+        }
     }
 
     

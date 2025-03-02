@@ -70,7 +70,7 @@ public class MyBot : IChessBot
         timeLimit = timeLeft;
         //timeLimit = 2000;
 
-        if (!fixedTime) timeLimit  = TimeManager.CalculateMaxTime(timeLeft, board.fullMoveCount);
+        if (!fixedTime) timeLimit  = TimeManager.CalculateMaxTime(timeLeft, board.FullMoveCount);
 
         clock.Start();
 

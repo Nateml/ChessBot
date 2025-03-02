@@ -173,9 +173,9 @@ class FenBuilder
 
         fen += " ";
 
-        fen += board.fullMoveCount + " ";
+        fen += board.NumPlySincePawnMoveOrCapture + " ";
 
-        fen += board.halfMoveCount;
+        fen += board.FullMoveCount;
 
         return fen;
     }
