@@ -13,7 +13,7 @@ public class MyBot : IChessBot
 
     private readonly byte MaxDistance = 50;
 
-    private readonly int QuiscenceDepth = 50;
+    private readonly int QuiscenceDepth = 7;
 
     private int transpositions = 0;
 
