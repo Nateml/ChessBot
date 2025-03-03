@@ -9,7 +9,7 @@ public class TranspositionData
     public const byte LowerboundFlag = 1;
     public const byte UpperboundFlag = 2;
 
-    public TranspositionData(ulong zobristHash, byte depth, byte flag, int eval, Move? bestMove)
+    public TranspositionData(ulong zobristHash, byte depth, byte flag, double eval, Move? bestMove)
     {
         ZobristHash = zobristHash;
         Depth = depth;
@@ -24,7 +24,7 @@ public class TranspositionData
 
     public byte Flag { get; private set; }
 
-    public int Eval { get; private set; }
+    public double Eval { get; private set; }
 
     public Move? BestMove { get; private set; }
 

@@ -37,6 +37,8 @@ public class MyBot : IChessBot
     private Move? bestMove;
 
     private Stopwatch clock = new Stopwatch();
+    private NNUE nnue = new NNUE();
+    private const bool Training = false;
 
     public MyBot()
     {
@@ -79,15 +81,15 @@ public class MyBot : IChessBot
         killerMoves.Clear();
 
         priorityMove = board.GetLegalMoves()[0];
-        int alpha = -100000;
-        int beta = 100000;
-        int retryMultiplier = 0;
+        double alpha = -100000;
+        double beta = 100000;
+        // int retryMultiplier = 0;
         for (byte distance = 1; distance < MaxDistance && !OutOfTime() && !exitSearch && !cancellationToken.IsCancellationRequested;)
         {
             Stopwatch stopwatch = new();
             stopwatch.Start();
 
-            (Move newMove, int bestScore) = NegamaxAtRoot(board, distance, alpha, beta, cancellationToken);
+            (Move newMove, double bestScore) = NegamaxAtRoot(board, distance, alpha, beta, cancellationToken);
 
             if (OutOfTime() || cancellationToken.IsCancellationRequested) break;
 
@@ -115,30 +117,29 @@ public class MyBot : IChessBot
             }
 
             // Check if eval was outside the aspiration window
-            if (bestScore <= alpha)
-            {
-                retryMultiplier += 1;
-                alpha -= 150 * retryMultiplier;
-                beta += 20;
-                continue;
-            }
-            if (bestScore >= beta)
-            {
-                retryMultiplier += 1;
-                beta += 150 * retryMultiplier;
-                alpha -= 20;
-                continue;
-            }
+            // if (bestScore <= alpha)
+            // {
+            //     retryMultiplier += 1;
+            //     alpha -= 150 * retryMultiplier;
+            //     beta += 20;
+            //     continue;
+            // }
+            // if (bestScore >= beta)
+            // {
+            //     retryMultiplier += 1;
+            //     beta += 150 * retryMultiplier;
+            //     alpha -= 20;
+            //     continue;
+            // }
 
             // Only updating the "priority move" here, because I don't want to update it with a move that had a score outside of the aspiration window
             priorityMove = newMove;
 
-
-            retryMultiplier = 0;
+            // retryMultiplier = 0;
 
             // Adjust the aspiration window
-            alpha = bestScore - 30;
-            beta = bestScore + 30;
+            // alpha = bestScore - 30;
+            // beta = bestScore + 30;
 
             distance++;
         }
@@ -148,8 +149,11 @@ public class MyBot : IChessBot
         return priorityMove;
     }
 
-    private (Move, int) NegamaxAtRoot(Board board, byte depth, int alpha, int beta, CancellationToken cancellationToken)
+    private (Move, double) NegamaxAtRoot(Board board, byte depth, double alpha, double beta, CancellationToken cancellationToken)
     {
+        // Initialize NNUE
+        nnue.Initialize(NNUE.GetInput(board));
+
         nodesReached = 0;
         transpositions = 0;
 
@@ -163,7 +167,7 @@ public class MyBot : IChessBot
         }
 
         Move bestMove = moves[0];
-        int bestScore = -1000000;
+        double bestScore = -1000000;
 
         for (int i = 0; i < moves.Length && !OutOfTime() && !cancellationToken.IsCancellationRequested; i++)
         {
@@ -172,10 +176,14 @@ public class MyBot : IChessBot
             Move move = moves[i];
 
             board.MakeMove(move);
-            evalManager.Update(move);
-            int score = -Negamax(board, (byte)(depth-1), 1, -beta, -alpha, board.IsWhiteToMove ? 1 : -1, cancellationToken);
+            //evalManager.Update(move);
+            // Update the NNUE input
+            nnue.ApplyMove(move);
+
+            double score = -Negamax(board, (byte)(depth-1), 1, -beta, -alpha, board.IsWhiteToMove ? 1 : -1, cancellationToken);
             board.UnmakeMove();
-            evalManager.Undo();
+            //evalManager.Undo();
+            nnue.UndoMove(move);
 
             if (score > bestScore)
             {
@@ -193,7 +201,7 @@ public class MyBot : IChessBot
         return (bestMove, bestScore);
     }
 
-    private int Negamax(Board board, byte depth, int distanceFromRoot, int alpha, int beta, int colour, CancellationToken cancellationToken)
+    private double Negamax(Board board, byte depth, int distanceFromRoot, double alpha, double beta, int colour, CancellationToken cancellationToken)
     {
         if (OutOfTime() || cancellationToken.IsCancellationRequested) return 0;
         //if (UCI.IsStopRequested()) return 0;
@@ -222,7 +230,7 @@ public class MyBot : IChessBot
         }
 
         // Store the initial alpha to check node type later on
-        int originalAlpha = alpha;
+        double originalAlpha = alpha;
 
         Move? bestMove = null;
 
@@ -272,7 +280,7 @@ public class MyBot : IChessBot
         {
             const int R = 3;
             board.MakeMove(Move.MakeNullMove());
-            int val = -Negamax(board, (byte)(depth-1-R), distanceFromRoot+1, -beta, -beta+1, -colour, cancellationToken);
+            double val = -Negamax(board, (byte)(depth-1-R), distanceFromRoot+1, -beta, -beta+1, -colour, cancellationToken);
             board.UnmakeMove();
             if (val >= beta) return val;
         }
@@ -290,7 +298,7 @@ public class MyBot : IChessBot
 
         //MoveScores cachedMoveScores = new();
 
-        int bestScore = -1000001;
+        double bestScore = -1000001;
         for (int i = 0; i < moves.Length; i++)
         {
 
@@ -298,9 +306,10 @@ public class MyBot : IChessBot
             Move move = moves[i];
 
             board.MakeMove(move);
-            evalManager.Update(move);
+            // evalManager.Update(move);
+            nnue.ApplyMove(move);
 
-            int val;
+            double val;
 
             if (i > 5 && depth >= 3 && !move.IsCapture())
             {
@@ -323,7 +332,8 @@ public class MyBot : IChessBot
             //val = -Negamax(board, depth-1, distanceFromRoot+1, -beta, -alpha, -colour);
 
             board.UnmakeMove();
-            evalManager.Undo();
+            // evalManager.Undo();
+            nnue.UndoMove(move);
 
             if (OutOfTime() || cancellationToken.IsCancellationRequested) return 0; // Exit early if we are out of time
 
@@ -368,7 +378,7 @@ public class MyBot : IChessBot
         return bestScore;
     }
 
-    private int Quiescence(Board board, int depth, int distanceFromRoot, int alpha, int beta, int colour)
+    private double Quiescence(Board board, int depth, int distanceFromRoot, double alpha, double beta, int colour)
     {
         //if (UCI.IsStopRequested()) return 0;
         if (OutOfTime()) return 0;
@@ -385,16 +395,18 @@ public class MyBot : IChessBot
             return tdata.Eval;
         }
 
-        if ( depth == 0 ) return Evaluation.EvaluateBoard(board, evalManager) * colour;
+        //if ( depth == 0 ) return Evaluation.EvaluateBoard(board, evalManager) * colour;
+        if (depth == 0 ) return nnue.Forward();
 
-        int standPat = Evaluation.EvaluateBoard(board, evalManager) * colour;
+        //int standPat = Evaluation.EvaluateBoard(board, evalManager) * colour;
+        double standPat = nnue.Forward();
         
         if ( standPat >= beta ) return standPat;
 
         // Delta pruning
-        int BigDelta = 900;
+        // int BigDelta = 900;
 
-        if ( standPat < alpha - BigDelta ) return standPat;
+        // if ( standPat < alpha - BigDelta ) return standPat;
 
         alpha = Math.Max(alpha, standPat);
 
@@ -413,10 +425,12 @@ public class MyBot : IChessBot
             }
 
             board.MakeMove(move);
-            evalManager.Update(move);
-            int val = -Quiescence(board, depth-1, distanceFromRoot+1, -beta, -alpha, -colour);
+            // evalManager.Update(move);
+            nnue.ApplyMove(move);
+            double val = -Quiescence(board, depth-1, distanceFromRoot+1, -beta, -alpha, -colour);
             board.UnmakeMove();
-            evalManager.Undo();
+            // evalManager.Undo();
+            nnue.UndoMove(move);
 
             if (OutOfTime()) return 0; // Exit early if we are out of time
 
