@@ -93,10 +93,25 @@ class UCI
             Console.WriteLine("Num ply since pawn move or capture: " + board.NumPlySincePawnMoveOrCapture);
             Console.WriteLine("Repetitions: " + MyBot.CountRepetitions(board.History, board.ZobristHash, board.NumPlySincePawnMoveOrCapture, true));
         }
-        else if(input == "debug ply")
+        else if (input == "debug ply")
         {
             Console.WriteLine("Ply: " + board.NumPlyPlayed);
             Console.WriteLine("Ply since pawn move or capture: " + board.NumPlySincePawnMoveOrCapture);
+        }
+        else if (input == "debug tt")
+        {
+            InputDebugTT(input);
+        }
+    }
+
+    static void InputDebugTT(string input)
+    {
+        if (input == "debug tt")
+        {
+            Console.WriteLine("Transposition table contains " + ((MyBot)bot).tTable.PopCount() + " transpositions.");
+        }
+        else if (input == "debug tt pv")
+        {
         }
     }
 

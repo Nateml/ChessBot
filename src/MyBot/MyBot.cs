@@ -24,7 +24,7 @@ public class MyBot : IChessBot
     /// </summary>
     private int timeLimit = 3000;
 
-    Move? priorityMove;
+    public Move? priorityMove;
 
     private bool exitSearch = false;
 
@@ -119,14 +119,14 @@ public class MyBot : IChessBot
             {
                 retryMultiplier += 1;
                 alpha -= 150 * retryMultiplier;
-                beta += 20;
+                beta += 20 * retryMultiplier;
                 continue;
             }
             if (bestScore >= beta)
             {
                 retryMultiplier += 1;
                 beta += 150 * retryMultiplier;
-                alpha -= 20;
+                alpha -= 20 * retryMultiplier;
                 continue;
             }
 
@@ -520,8 +520,9 @@ public class MyBot : IChessBot
         return clock.ElapsedMilliseconds > timeLimit;
     }
 
-    private List<Move> ExtractPV(Board board, Move firstPVMove, int depth)
+    public List<Move> ExtractPV(Board board, Move firstPVMove, int depth, bool debug = true)
     {
+        if (debug) Console.WriteLine("Extracting PV:");
         List<Move> pv = new()
         {
             firstPVMove
@@ -532,6 +533,12 @@ public class MyBot : IChessBot
         while (nextPositionFromTTable != null && nextPositionFromTTable.Depth != 0 && depth != 0)
         {
             if (nextPositionFromTTable.BestMove == null) break;
+            if (debug) {
+                Console.WriteLine("Best move: " + nextPositionFromTTable.BestMove);
+                Console.WriteLine("Eval: " + nextPositionFromTTable.Eval);
+                Console.WriteLine("Depth: " + nextPositionFromTTable.Depth);
+                Console.WriteLine("Flag: " + nextPositionFromTTable.Flag);
+            }
             pv.Add(nextPositionFromTTable.BestMove);
             board.MakeMove(nextPositionFromTTable.BestMove);
             nextPositionFromTTable = tTable.Get(board);
