@@ -4,7 +4,7 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using ChessBot;
 
-public class MyBot : IChessBot
+public class TreestrapBot : IChessBot
 {
 
     public readonly TranspositionTable tTable = new(8034709);
@@ -13,7 +13,7 @@ public class MyBot : IChessBot
 
     private readonly byte MaxDistance = 50;
 
-    private readonly int QuiscenceDepth = 7;
+    private readonly int QuiscenceDepth = 6;
 
     private int transpositions = 0;
 
@@ -37,8 +37,10 @@ public class MyBot : IChessBot
     private Move? bestMove;
 
     private Stopwatch clock = new Stopwatch();
+    private NNUE nnue = new NNUE();
+    private const bool Training = true;
 
-    public MyBot()
+    public TreestrapBot()
     {
         killerMoves = new KillerMoves(MaxDistance+QuiscenceDepth);
     }
@@ -52,6 +54,7 @@ public class MyBot : IChessBot
 
     public Move GetBestMove(Board board, int timeLeft, CancellationToken cancellationToken, bool fixedTime = false, bool printToConsole = true)
     {
+        double loss = 0;
         // Play a book move if we can
         if (!isOutOfBook)
         {
@@ -70,38 +73,35 @@ public class MyBot : IChessBot
         timeLimit = timeLeft;
         //timeLimit = 2000;
 
-        if (!fixedTime) timeLimit  = TimeManager.CalculateMaxTime(timeLeft, board.FullMoveCount);
+        if (!fixedTime) timeLimit  = TimeManager.CalculateMaxTime(timeLeft, board.FullMoveCount + (Training ? 5 : 0)); // +5 for training to avoid speeding up the initial moves
 
         clock.Start();
-
         tTable.Clear();
-
         killerMoves.Clear();
 
         priorityMove = board.GetLegalMoves()[0];
-        int alpha = -100000;
-        int beta = 100000;
+
+        double alpha = -100000;
+        double beta = 100000;
         int retryMultiplier = 0;
+
+        int finalDepth = 0;
+
         for (byte distance = 1; distance < MaxDistance && !OutOfTime() && !exitSearch && !cancellationToken.IsCancellationRequested;)
         {
+            finalDepth = distance;
+
             Stopwatch stopwatch = new();
             stopwatch.Start();
 
-            (Move newMove, int bestScore) = NegamaxAtRoot(board, distance, alpha, beta, cancellationToken);
+            (Move newMove, double bestScore) = NegamaxAtRoot(board, distance, alpha, beta, cancellationToken);
 
             if (OutOfTime() || cancellationToken.IsCancellationRequested) break;
 
             stopwatch.Stop();
 
-            if (!board.IsMoveLegal(newMove)) 
-            {
-                // I'm not sure why we sometimes get an illegal move, but maybe it has 
-                // something to do with the transposition table.
-                Console.WriteLine("Illegal move");
-                tTable.Clear();
-                distance = 1;
-                continue;
-            }
+            // Store the root in the transposition table
+            tTable.Put(board, MaxDistance, TranspositionData.ExactFlag, (int)bestScore, priorityMove);
 
             if (printToConsole)
             {
@@ -115,41 +115,57 @@ public class MyBot : IChessBot
             }
 
             // Check if eval was outside the aspiration window
-            if (bestScore <= alpha)
+            if (!Training)
             {
-                retryMultiplier += 1;
-                alpha -= 150 * retryMultiplier;
-                beta += 20;
-                continue;
-            }
-            if (bestScore >= beta)
-            {
-                retryMultiplier += 1;
-                beta += 150 * retryMultiplier;
-                alpha -= 20;
-                continue;
+                if (bestScore <= alpha)
+                {
+                    retryMultiplier += 1;
+                    alpha -= 150 * retryMultiplier;
+                    beta += 20;
+                    continue;
+                }
+                if (bestScore >= beta)
+                {
+                    retryMultiplier += 1;
+                    beta += 150 * retryMultiplier;
+                    alpha -= 20;
+                    continue;
+                }
+
+                retryMultiplier = 0;
+
+                // Adjust the aspiration window
+                alpha = bestScore - 30;
+                beta = bestScore + 30;
             }
 
             // Only updating the "priority move" here, because I don't want to update it with a move that had a score outside of the aspiration window
             priorityMove = newMove;
-
-
-            retryMultiplier = 0;
-
-            // Adjust the aspiration window
-            alpha = bestScore - 30;
-            beta = bestScore + 30;
 
             distance++;
         }
 
         clock.Stop();
         clock.Reset();
+
+
+        // Time to train the NNUE
+        loss = 0;
+        if (Training)
+        {
+            loss += UpdateFromTranspositionTable(board, Math.Max(finalDepth - 2, 1), new HashSet<ulong>());
+        }
+
+        Console.WriteLine("Loss: " + loss);
+
         return priorityMove;
     }
 
-    private (Move, int) NegamaxAtRoot(Board board, byte depth, int alpha, int beta, CancellationToken cancellationToken)
+    private (Move, double) NegamaxAtRoot(Board board, byte depth, double alpha, double beta, CancellationToken cancellationToken)
     {
+        // Initialize NNUE
+        nnue.Initialize(NNUE.GetInput(board));
+
         nodesReached = 0;
         transpositions = 0;
 
@@ -163,7 +179,7 @@ public class MyBot : IChessBot
         }
 
         Move bestMove = moves[0];
-        int bestScore = -1000000;
+        double bestScore = -1000000;
 
         for (int i = 0; i < moves.Length && !OutOfTime() && !cancellationToken.IsCancellationRequested; i++)
         {
@@ -172,10 +188,14 @@ public class MyBot : IChessBot
             Move move = moves[i];
 
             board.MakeMove(move);
-            evalManager.Update(move);
-            int score = -Negamax(board, (byte)(depth-1), 1, -beta, -alpha, board.IsWhiteToMove ? 1 : -1, cancellationToken);
+            //evalManager.Update(move);
+            // Update the NNUE input
+            nnue.ApplyMove(move);
+
+            double score = -Negamax(board, (byte)(depth-1), 1, -beta, -alpha, board.IsWhiteToMove ? 1 : -1, cancellationToken);
             board.UnmakeMove();
-            evalManager.Undo();
+            //evalManager.Undo();
+            nnue.UndoMove(move);
 
             if (score > bestScore)
             {
@@ -193,7 +213,7 @@ public class MyBot : IChessBot
         return (bestMove, bestScore);
     }
 
-    private int Negamax(Board board, byte depth, int distanceFromRoot, int alpha, int beta, int colour, CancellationToken cancellationToken)
+    private double Negamax(Board board, byte depth, int distanceFromRoot, double alpha, double beta, int colour, CancellationToken cancellationToken)
     {
         if (OutOfTime() || cancellationToken.IsCancellationRequested) return 0;
         //if (UCI.IsStopRequested()) return 0;
@@ -222,7 +242,7 @@ public class MyBot : IChessBot
         }
 
         // Store the initial alpha to check node type later on
-        int originalAlpha = alpha;
+        double originalAlpha = alpha;
 
         Move? bestMove = null;
 
@@ -267,12 +287,12 @@ public class MyBot : IChessBot
             return Quiescence(board, QuiscenceDepth, distanceFromRoot+1, alpha, beta, colour);
         }
 
-        // Null Move Pruning
-        if (depth >= 5 && !board.IsKingInCheck(board.IsWhiteToMove) && !board.IsKingInCheck(!board.IsWhiteToMove))
+        // Null Move Pruning (only when not in training mode)
+        if (!Training && depth >= 5 && !board.IsKingInCheck(board.IsWhiteToMove) && !board.IsKingInCheck(!board.IsWhiteToMove))
         {
             const int R = 3;
             board.MakeMove(Move.MakeNullMove());
-            int val = -Negamax(board, (byte)(depth-1-R), distanceFromRoot+1, -beta, -beta+1, -colour, cancellationToken);
+            double val = -Negamax(board, (byte)(depth-1-R), distanceFromRoot+1, -beta, -beta+1, -colour, cancellationToken);
             board.UnmakeMove();
             if (val >= beta) return val;
         }
@@ -290,7 +310,7 @@ public class MyBot : IChessBot
 
         //MoveScores cachedMoveScores = new();
 
-        int bestScore = -1000001;
+        double bestScore = -1000001;
         for (int i = 0; i < moves.Length; i++)
         {
 
@@ -298,9 +318,9 @@ public class MyBot : IChessBot
             Move move = moves[i];
 
             board.MakeMove(move);
-            evalManager.Update(move);
+            nnue.ApplyMove(move);
 
-            int val;
+            double val;
 
             if (i > 5 && depth >= 3 && !move.IsCapture())
             {
@@ -320,10 +340,8 @@ public class MyBot : IChessBot
                 val = -Negamax(board, (byte)(depth-1), distanceFromRoot+1, -beta, -alpha, -colour, cancellationToken);
             }
 
-            //val = -Negamax(board, depth-1, distanceFromRoot+1, -beta, -alpha, -colour);
-
             board.UnmakeMove();
-            evalManager.Undo();
+            nnue.UndoMove(move);
 
             if (OutOfTime() || cancellationToken.IsCancellationRequested) return 0; // Exit early if we are out of time
 
@@ -335,7 +353,7 @@ public class MyBot : IChessBot
                     // Store as a killer move
                     killerMoves.Insert(move, distanceFromRoot);
                 }
-                tTable.Put(board, depth, TranspositionData.LowerboundFlag, val, move);
+                tTable.Put(board, depth, TranspositionData.LowerboundFlag, (int)val, move);
                 return val;
             }
 
@@ -363,14 +381,13 @@ public class MyBot : IChessBot
         }
 
         // We store the "best move" only if we found an exact evaluation, or if the move was good enough to cause a cutoff
-        tTable.Put(board, depth, flag, bestScore, !(flag == TranspositionData.UpperboundFlag) ? bestMove : null);
+        tTable.Put(board, depth, flag, (int)bestScore, !(flag == TranspositionData.UpperboundFlag) ? bestMove : null);
 
         return bestScore;
     }
 
-    private int Quiescence(Board board, int depth, int distanceFromRoot, int alpha, int beta, int colour)
+    private double Quiescence(Board board, int depth, int distanceFromRoot, double alpha, double beta, int colour)
     {
-        //if (UCI.IsStopRequested()) return 0;
         if (OutOfTime()) return 0;
 
         nodesReached++;
@@ -385,20 +402,18 @@ public class MyBot : IChessBot
             return tdata.Eval;
         }
 
-        if ( depth == 0 ) return Evaluation.EvaluateBoard(board, evalManager) * colour;
+        if (depth == 0 ) return nnue.Forward() * colour;
 
-        int standPat = Evaluation.EvaluateBoard(board, evalManager) * colour;
+        double standPat = nnue.Forward() * colour;
         
         if ( standPat >= beta ) return standPat;
 
         // Delta pruning
-        int BigDelta = 900;
+        // int BigDelta = 900;
 
-        if ( standPat < alpha - BigDelta ) return standPat;
+        // if ( standPat < alpha - BigDelta ) return standPat;
 
         alpha = Math.Max(alpha, standPat);
-
-        //MoveScores cachedMoveScores = new();
 
         Move[] moves = board.GetLegalMoves(true);
         for (int i = 0; i < moves.Length; i++)
@@ -406,17 +421,13 @@ public class MyBot : IChessBot
             PickMove(moves, i, board, distanceFromRoot);
             Move move = moves[i];
 
-            // Skip this move if the value of the captured piece is not enough to raise alpha (within a 100 safety margin) 
-            if (standPat < alpha - Evaluation.GetOpeningPieceValue(move.CapturedPiece) - 100)
-            {
-                continue;
-            }
-
             board.MakeMove(move);
-            evalManager.Update(move);
-            int val = -Quiescence(board, depth-1, distanceFromRoot+1, -beta, -alpha, -colour);
+            nnue.ApplyMove(move);
+
+            double val = -Quiescence(board, depth-1, distanceFromRoot+1, -beta, -alpha, -colour);
+
             board.UnmakeMove();
-            evalManager.Undo();
+            nnue.UndoMove(move);
 
             if (OutOfTime()) return 0; // Exit early if we are out of time
 
@@ -430,37 +441,6 @@ public class MyBot : IChessBot
         return standPat;
     }
 
-    private void PickMove(Move[] moves, int startingIndex, Board board, int distanceFromRoot, MoveScores cachedMoveScores, Move? bestMove = null)
-    {
-        // We can calculate the score of the first move once before running the loop
-        int startingMoveScore = Evaluation.EvaluateMove(moves[startingIndex], board, killerMoves, distanceFromRoot, evalManager.GamePhase);
-
-        for (int i = startingIndex+1; i < moves.Length; i++)
-        {
-            int currentMoveScore;
-
-            // Check if we have already calculated and stored the score of the move we are currently checking
-            (int cachedScore, bool hasCachedScore) = cachedMoveScores.Get(moves[i]);
-            if (hasCachedScore) currentMoveScore = cachedScore; // Use the cached score if its available
-            else 
-            {
-                currentMoveScore = Evaluation.EvaluateMove(moves[i], board, killerMoves, distanceFromRoot, evalManager.GamePhase);
-                cachedMoveScores.Put(moves[i], currentMoveScore); // Cache the score
-            }
-
-            // For performance improvements, I'm only checking if this move == best move once during the first call
-            if (startingIndex == 0 && bestMove != null && moves[i].Equals(bestMove))
-            {
-                (moves[i], moves[startingIndex]) = (moves[startingIndex], moves[i]);
-                return; // We have already performed the "best swap", so we can return early
-            }
-            else if (currentMoveScore > startingMoveScore)
-            {
-                (moves[i], moves[startingIndex]) = (moves[startingIndex], moves[i]);
-                startingMoveScore = currentMoveScore;
-            }
-        }
-    }
     private void PickMove(Move[] moves, int startingIndex, Board board, int distanceFromRoot, Move? bestMove = null)
     {
         //int scoreAtStartingIndex = Evaluation.EvaluateMove(moves[startingIndex], board, killerMoves, distanceFromRoot, evalManager.GamePhase);
@@ -513,7 +493,6 @@ public class MyBot : IChessBot
             }
         }
     }
-
 
     private bool OutOfTime()
     {
@@ -583,6 +562,68 @@ public class MyBot : IChessBot
             numPlySincePawnMoveOrCapture -= 2;
         }
         return count;
+    }
+
+    private double UpdateFromTranspositionTable(Board board, int d, HashSet<ulong> visited, int currentDepth = 0, int maxDepth = 10)
+    {
+        // Probe the transposition table
+        TranspositionData? entry = tTable.Get(board);     
+
+        // If the entry is null or if it was evaluated at a shallower depth than our minimum depth d, we don't use it
+        if (entry == null || entry.Depth < d)
+        {
+            return 0;
+        }
+
+        // Avoiding cycles
+        if (visited.Contains(board.ZobristHash))
+        {
+            return 0;
+        }
+
+        if (currentDepth >= maxDepth)
+        {
+            return 0;
+        }
+
+        visited.Add(board.ZobristHash);
+
+        // Determine whose turn it is
+        bool isWhite = board.IsWhiteToMove;
+
+        int eval = entry.Eval * (isWhite ? 1 : -1);
+
+        double loss = nnue.Train(eval);
+
+        // Crawl through the transposition table
+        // Get all successor states of the current state
+        Move[] moves = board.GetLegalMoves();
+        foreach (Move move in moves)
+        {
+            board.MakeMove(move);
+            loss += UpdateFromTranspositionTable(board, d, visited, currentDepth: currentDepth+1, maxDepth: maxDepth);
+            board.UnmakeMove();
+        }
+
+        // Check if loss is NaN or greater than 10000
+        if (double.IsNaN(loss) || loss > 10000)
+        {
+            loss = 10000;
+        }
+
+        visited.Remove(board.ZobristHash);
+
+        return loss;
+    }
+
+    public void SaveWeights()
+    {
+        nnue.SaveWeights();
+    }
+
+    public void LoadWeights()
+    {
+        nnue.LoadWeights();
     }
 
     public Move? BestMove { get { return bestMove; }}

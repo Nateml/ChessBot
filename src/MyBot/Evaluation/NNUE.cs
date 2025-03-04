@@ -1,3 +1,5 @@
+using Microsoft.VisualBasic;
+
 namespace ChessBot;
 
 /// <summary>
@@ -11,8 +13,7 @@ public class NNUE
 
     // The neural network will have 4 layers:
     // 1. Input later: 768 binary features (64 squares * 12 piece types).
-    // 2. Hidden layer 1: 256 neurons.
-    // 3. Hidden layer 2: 128 neurons.
+    // 2. Hidden layer 1: 1024 neurons.
     // 4. Output layer: 1 neuron, representing the evaluation of the position.
 
     // The neural network will be trained using reinforcement learning.
@@ -28,6 +29,8 @@ public class NNUE
     private double[] hiddenLayer1Activations; // [HiddenLayer1Size]
     private double[] preActivation1; // [HiddenLayer1Size]
     private double[] input; // [InputLayerSize]
+
+    public const string ModelPath = "nnue_weights.txt";
 
     public NNUE()
     {
@@ -89,9 +92,66 @@ public class NNUE
         {
             output += weights2[i] * hiddenLayer1Activations[i];
         }
-        output = Math.Tanh(output);
+        
+        // I am going to keep the output linear,
+        // so no activation function needed.
+        // output = Math.Tanh(output);
 
         return output;
+    }
+
+    /// <summary>
+    /// Performs a forward and backward pass through the neural network using the current state.
+    /// Calculates the gradients which move the weights and biases in the direction of minimizing the loss,
+    /// </summary>
+    /// <returns></returns>
+    public double Train(double target, double learningRate = 0.000001)
+    {
+        // === Forward Pass ===
+        // Compute output layer (hidden layer has already been computed in the incremental update).
+        double output = biases2;
+        for (int i = 0; i < HiddenLayer1Size; i++)
+        {
+            output += weights2[i] * hiddenLayer1Activations[i];
+        }
+
+        // Compute mean squared error loss.
+        double loss = 0.5 * (output - target) * (output - target);
+
+        // === Backward Pass ===
+        // Compute output delta.
+        // Derivative of the loss with respect to the output is (output - target).
+        double deltaOutput = output - target;
+
+        // Calculate the gradients for the output layer weights and bias.
+        for (int i = 0; i < HiddenLayer1Size; i++)
+        {
+            double grad = deltaOutput * hiddenLayer1Activations[i];
+            weights2[i] -= grad * learningRate;
+        }
+        biases2 -= deltaOutput * learningRate;
+
+        // Backpropagate to the hidden layer.
+        double[] deltaHidden = new double[HiddenLayer1Size];
+        for (int i = 0; i < HiddenLayer1Size; i++)
+        {
+            // ReLU derivative: 1 if preActivation > 0, else 0.
+            double dReLU = preActivation1[i] > 0 ? 1.0 : 0.0;
+            deltaHidden[i] = deltaOutput * weights2[i] * dReLU;
+        }
+
+        // Update hidden layer weights and biases.
+        for (int i = 0; i < HiddenLayer1Size; i++)
+        {
+            for (int j = 0; j < InputLayerSize; j++)
+            {
+                double grad = deltaHidden[i] * input[j];
+                weights1[j, i] -= grad * learningRate;
+            }
+            biases1[i] -= deltaHidden[i] * learningRate;
+        }
+
+        return loss;
     }
 
     /// <summary>
@@ -152,80 +212,6 @@ public class NNUE
             preActivation1[i] += weights1[featureIndex, i] * delta;
             hiddenLayer1Activations[i] = ReLu(preActivation1[i]);
         }
-    }
-
-    /// <summary>
-    /// Trains the network using the given input and target value.
-    /// </summary>
-    /// <param name="input">The state of the board at the current node</param>
-    /// <param name="target">The Minimax search value of the current node in the tree</param>
-    /// <param name="learningRate"></param>
-    /// <returns></returns>
-    public double Train(double[] input, double target, double learningRate = 0.01)
-    {
-        if (input.Length != InputLayerSize)
-            throw new ArgumentException($"Input must have {InputLayerSize} elements.");
-
-        // === Forward Pass ===
-        // Compute hidden layer.
-        double[] localPreActivation1 = new double[HiddenLayer1Size];
-        double[] localHidden1 = new double[HiddenLayer1Size];
-        for (int i = 0; i < HiddenLayer1Size; i++)
-        {
-            double sum = biases1[i];
-            for (int j = 0; j < InputLayerSize; j++)
-            {
-                sum += weights1[j, i] * input[j];
-            }
-            localPreActivation1[i] = sum;
-            localHidden1[i] = sum > 0 ? sum : 0;
-        }
-
-        // Compute output layer.
-        double outputSum = biases2;
-        for (int i = 0; i < HiddenLayer1Size; i++)
-        {
-            outputSum += weights2[i] * localHidden1[i];
-        }
-        double y = Math.Tanh(outputSum);
-
-        // Compute mean squared error loss.
-        double loss = 0.5 * (y - target) * (y - target);
-
-        // === Backpropagation ===
-        // Compute output delta.
-        // Derivative of tanh is: 1 - tanh^2(outputSum)
-        double deltaOutput = (y - target) * (1 - y * y);
-
-        // Update output layer weights and bias.
-        for (int i = 0; i < HiddenLayer1Size; i++)
-        {
-            double grad = deltaOutput * localHidden1[i];
-            weights2[i] -= learningRate * grad;
-        }
-        biases2 -= learningRate * deltaOutput;
-
-        // Backpropagate to the hidden layer.
-        double[] deltaHidden = new double[HiddenLayer1Size];
-        for (int i = 0; i < HiddenLayer1Size; i++)
-        {
-            // ReLU derivative: 1 if preActivation > 0, else 0.
-            double dReLU = localPreActivation1[i] > 0 ? 1.0 : 0.0;
-            deltaHidden[i] = deltaOutput * weights2[i] * dReLU;
-        }
-
-        // Update hidden layer weights and biases.
-        for (int i = 0; i < HiddenLayer1Size; i++)
-        {
-            for (int j = 0; j < InputLayerSize; j++)
-            {
-                double grad = deltaHidden[i] * input[j];
-                weights1[j, i] -= learningRate * grad;
-            }
-            biases1[i] -= learningRate * deltaHidden[i];
-        }
-
-        return loss;
     }
 
     private double ReLu(double x)
@@ -382,6 +368,73 @@ public class NNUE
 
         // 4. Finally, restore the moving piece to its source square.
         UpdateFeature(pieceType * 64 + sourceSquare, 1);
+    }
+
+    public void SaveWeights()
+    {
+        using StreamWriter writer = new(ModelPath);
+
+        // Write the weights1
+        for (int i = 0; i < HiddenLayer1Size; i++)
+        {
+            for (int j = 0; j < InputLayerSize; j++)
+            {
+                writer.WriteLine(weights1[j, i]);
+            }
+        }
+
+        // Write the biases1
+        for (int i = 0; i < HiddenLayer1Size; i++)
+        {
+            writer.WriteLine(biases1[i]);
+        }
+
+        // Write the weights2
+        for (int i = 0; i < HiddenLayer1Size; i++)
+        {
+            writer.WriteLine(weights2[i]);
+        }
+
+        // Write the bias2
+        writer.WriteLine(biases2);
+    }
+
+    public void LoadWeights()
+    {
+        try
+        {
+            using StreamReader reader = new(ModelPath);
+
+            // Read the weights1
+            for (int i = 0; i < HiddenLayer1Size; i++)
+            {
+                for (int j = 0; j < InputLayerSize; j++)
+                {
+                    weights1[j, i] = double.Parse(reader.ReadLine());
+                }
+            }
+
+            // Read the biases1
+            for (int i = 0; i < HiddenLayer1Size; i++)
+            {
+                biases1[i] = double.Parse(reader.ReadLine());
+            }
+
+            // Read the weights2
+            for (int i = 0; i < HiddenLayer1Size; i++)
+            {
+                weights2[i] = double.Parse(reader.ReadLine());
+            }
+
+            // Read the bias2
+            biases2 = double.Parse(reader.ReadLine());
+            }
+        catch
+        {
+            Console.WriteLine("Could not load weights. Using random weights.");
+            return;
+        }
+
     }
 
 }

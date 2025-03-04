@@ -6,7 +6,7 @@ class UCI
     public const string EngineName = "Nate's C# ChessBot";
 
     private static Board board = new();
-    private static IChessBot bot = new MyBot();
+    private static IChessBot bot = new TreestrapBot();
     private static EvaluationManager evalManager = new(board);
 
     private static bool hasStopBeenRequested = false;
@@ -91,7 +91,7 @@ class UCI
         if (input == "debug repetitions")
         {
             Console.WriteLine("Num ply since pawn move or capture: " + board.NumPlySincePawnMoveOrCapture);
-            Console.WriteLine("Repetitions: " + MyBot.CountRepetitions(board.History, board.ZobristHash, board.NumPlySincePawnMoveOrCapture, true));
+            Console.WriteLine("Repetitions: " + TreestrapBot.CountRepetitions(board.History, board.ZobristHash, board.NumPlySincePawnMoveOrCapture, true));
         }
         else if(input == "debug ply")
         {
@@ -156,9 +156,9 @@ class UCI
 
     static void InputTranspositionTableStats()
     {
-        Console.WriteLine("Transposition table contains " + ((MyBot)bot).tTable.PopCount() + " transposition.");
-        Console.WriteLine("Transposition table is " + ((MyBot)bot).tTable.PercentageFull() + "% full.");
-        Console.WriteLine("There have been " + ((MyBot)bot).tTable.collisions + " collisions.");
+        Console.WriteLine("Transposition table contains " + ((TreestrapBot)bot).tTable.PopCount() + " transposition.");
+        Console.WriteLine("Transposition table is " + ((TreestrapBot)bot).tTable.PercentageFull() + "% full.");
+        Console.WriteLine("There have been " + ((TreestrapBot)bot).tTable.collisions + " collisions.");
     }
 
     static void InputTestPerft()
