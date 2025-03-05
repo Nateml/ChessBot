@@ -48,6 +48,7 @@ public class Game
                 Console.WriteLine($"Black: {move}");
             }
             board.MakeMove(move);
+            Console.WriteLine("FEN: " + FenBuilder.BuildFen(board));
             isGameOver = IsGameOver(board);
         }
 

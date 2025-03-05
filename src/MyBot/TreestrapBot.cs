@@ -81,8 +81,8 @@ public class TreestrapBot : IChessBot
 
         priorityMove = board.GetLegalMoves()[0];
 
-        double alpha = -100000;
-        double beta = 100000;
+        double alpha = double.MinValue;
+        double beta = double.MaxValue;
         int retryMultiplier = 0;
 
         int finalDepth = 0;
@@ -101,7 +101,7 @@ public class TreestrapBot : IChessBot
             stopwatch.Stop();
 
             // Store the root in the transposition table
-            tTable.Put(board, MaxDistance, TranspositionData.ExactFlag, (int)bestScore, priorityMove);
+            tTable.Put(board, MaxDistance, TranspositionData.ExactFlag, bestScore, priorityMove);
 
             if (printToConsole)
             {
@@ -156,7 +156,7 @@ public class TreestrapBot : IChessBot
             loss += UpdateFromTranspositionTable(board, Math.Max(finalDepth - 2, 1), new HashSet<ulong>());
         }
 
-        Console.WriteLine("Loss: " + loss);
+        // Console.WriteLine("Loss: " + loss);
 
         return priorityMove;
     }
@@ -164,7 +164,7 @@ public class TreestrapBot : IChessBot
     private (Move, double) NegamaxAtRoot(Board board, byte depth, double alpha, double beta, CancellationToken cancellationToken)
     {
         // Initialize NNUE
-        nnue.Initialize(NNUE.GetInput(board));
+        nnue.Initialize(NNUE.GetInput(board, true), NNUE.GetInput(board, false));
 
         nodesReached = 0;
         transpositions = 0;
@@ -179,7 +179,7 @@ public class TreestrapBot : IChessBot
         }
 
         Move bestMove = moves[0];
-        double bestScore = -1000000;
+        double bestScore = -1;
 
         for (int i = 0; i < moves.Length && !OutOfTime() && !cancellationToken.IsCancellationRequested; i++)
         {
@@ -190,12 +190,12 @@ public class TreestrapBot : IChessBot
             board.MakeMove(move);
             //evalManager.Update(move);
             // Update the NNUE input
-            nnue.ApplyMove(move);
+            nnue.ApplyMove(move, board);
 
             double score = -Negamax(board, (byte)(depth-1), 1, -beta, -alpha, board.IsWhiteToMove ? 1 : -1, cancellationToken);
             board.UnmakeMove();
             //evalManager.Undo();
-            nnue.UndoMove(move);
+            nnue.UndoMove();
 
             if (score > bestScore)
             {
@@ -303,14 +303,15 @@ public class TreestrapBot : IChessBot
         {
             if (board.IsKingInCheck(board.IsWhiteToMove))
             {
-                return -100000 - depth;
+                return -10000 - depth;
+                //return -1 - (depth/100.0);
             }
             return 0;
         }
 
         //MoveScores cachedMoveScores = new();
 
-        double bestScore = -1000001;
+        double bestScore = -1;
         for (int i = 0; i < moves.Length; i++)
         {
 
@@ -318,7 +319,7 @@ public class TreestrapBot : IChessBot
             Move move = moves[i];
 
             board.MakeMove(move);
-            nnue.ApplyMove(move);
+            nnue.ApplyMove(move, board);
 
             double val;
 
@@ -341,7 +342,7 @@ public class TreestrapBot : IChessBot
             }
 
             board.UnmakeMove();
-            nnue.UndoMove(move);
+            nnue.UndoMove();
 
             if (OutOfTime() || cancellationToken.IsCancellationRequested) return 0; // Exit early if we are out of time
 
@@ -381,7 +382,7 @@ public class TreestrapBot : IChessBot
         }
 
         // We store the "best move" only if we found an exact evaluation, or if the move was good enough to cause a cutoff
-        tTable.Put(board, depth, flag, (int)bestScore, !(flag == TranspositionData.UpperboundFlag) ? bestMove : null);
+        tTable.Put(board, depth, flag, bestScore, !(flag == TranspositionData.UpperboundFlag) ? bestMove : null);
 
         return bestScore;
     }
@@ -422,12 +423,12 @@ public class TreestrapBot : IChessBot
             Move move = moves[i];
 
             board.MakeMove(move);
-            nnue.ApplyMove(move);
+            nnue.ApplyMove(move, board);
 
             double val = -Quiescence(board, depth-1, distanceFromRoot+1, -beta, -alpha, -colour);
 
             board.UnmakeMove();
-            nnue.UndoMove(move);
+            nnue.UndoMove();
 
             if (OutOfTime()) return 0; // Exit early if we are out of time
 
@@ -444,7 +445,7 @@ public class TreestrapBot : IChessBot
     private void PickMove(Move[] moves, int startingIndex, Board board, int distanceFromRoot, Move? bestMove = null)
     {
         //int scoreAtStartingIndex = Evaluation.EvaluateMove(moves[startingIndex], board, killerMoves, distanceFromRoot, evalManager.GamePhase);
-        int scoreAtStartingIndex = moves[startingIndex].GetScore(board, killerMoves, distanceFromRoot, evalManager.GamePhase);
+        //int scoreAtStartingIndex = moves[startingIndex].GetScore(board, killerMoves, distanceFromRoot, evalManager.GamePhase);
         for (int i = startingIndex+1; i < moves.Length; i++)
         {
             // For performance improvements, I'm only checking if this move == best move once during the first call
@@ -459,14 +460,17 @@ public class TreestrapBot : IChessBot
             }
             else 
             {
+                return;
                 //int scoreAtCurrentMove = Evaluation.EvaluateMove(moves[i], board, killerMoves, distanceFromRoot, evalManager.GamePhase);
-                int scoreAtCurrentMove = moves[i].GetScore(board, killerMoves, distanceFromRoot, evalManager.GamePhase);
+                //int scoreAtCurrentMove = moves[i].GetScore(board, killerMoves, distanceFromRoot, evalManager.GamePhase);
 
-                if (scoreAtCurrentMove > scoreAtStartingIndex)
-                {
-                    (moves[i], moves[startingIndex]) = (moves[startingIndex], moves[i]);
-                    scoreAtStartingIndex = scoreAtCurrentMove;
-                }
+                //if (scoreAtCurrentMove > scoreAtStartingIndex)
+                //{
+                    //(moves[i], moves[startingIndex]) = (moves[startingIndex], moves[i]);
+                    //scoreAtStartingIndex = scoreAtCurrentMove;
+                //}
+
+                // return 
             }
         }
     }
@@ -591,7 +595,7 @@ public class TreestrapBot : IChessBot
         // Determine whose turn it is
         bool isWhite = board.IsWhiteToMove;
 
-        int eval = entry.Eval * (isWhite ? 1 : -1);
+        double eval = entry.Eval * (isWhite ? 1 : -1);
 
         double loss = nnue.Train(eval);
 
@@ -601,8 +605,10 @@ public class TreestrapBot : IChessBot
         foreach (Move move in moves)
         {
             board.MakeMove(move);
+            nnue.ApplyMove(move, board);
             loss += UpdateFromTranspositionTable(board, d, visited, currentDepth: currentDepth+1, maxDepth: maxDepth);
             board.UnmakeMove();
+            nnue.UndoMove();
         }
 
         // Check if loss is NaN or greater than 10000

@@ -238,18 +238,18 @@ public class MyBot : IChessBot
                 switch (tdata.Flag)
                 {
                     case TranspositionData.ExactFlag:
-                        return tdata.Eval;
+                        return (int)tdata.Eval;
                     case TranspositionData.LowerboundFlag:
-                        alpha = Math.Max(alpha, tdata.Eval);
+                        alpha = (int)Math.Max(alpha, tdata.Eval);
                         break;
                     case TranspositionData.UpperboundFlag:
-                        beta = Math.Min(beta, tdata.Eval);
+                        beta = (int)Math.Min(beta, tdata.Eval);
                         break;
                 }
 
                 if (alpha > beta) 
                 {
-                    return tdata.Eval;
+                    return (int)tdata.Eval;
                 }
             }
 
@@ -382,7 +382,7 @@ public class MyBot : IChessBot
         {
             // We should always use a transposition (no matter its depth) in the quiscence search
             transpositions++;
-            return tdata.Eval;
+            return (int)tdata.Eval;
         }
 
         if ( depth == 0 ) return Evaluation.EvaluateBoard(board, evalManager) * colour;

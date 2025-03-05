@@ -1,3 +1,5 @@
+using System.Drawing;
+using System.Numerics;
 using Microsoft.VisualBasic;
 
 namespace ChessBot;
@@ -9,72 +11,108 @@ namespace ChessBot;
 public class NNUE
 {
 
+    class State(double[] inputW, double[] inputB, double[] accumulatorActivationsW, double[] accumulatorActivationsB, double[] preactivationsW, double[] preactivationsB)
+    {
+        public readonly double[] InputW = inputW;
+        public readonly double[] InputB = inputB;
+        public readonly double[] AccumulatorActivationsW = accumulatorActivationsW;
+        public readonly double[] AccumulatorActivationsB = accumulatorActivationsB;
+        public readonly double[] PreactivationsW = preactivationsW;
+        public readonly double[] PreactivationsB = preactivationsB;
+    }
+
+    private Stack<State> stateHistory;
+
     // I will write the neural network model from scratch.
-
-    // The neural network will have 4 layers:
-    // 1. Input later: 768 binary features (64 squares * 12 piece types).
-    // 2. Hidden layer 1: 1024 neurons.
-    // 4. Output layer: 1 neuron, representing the evaluation of the position.
-
     // The neural network will be trained using reinforcement learning.
-    public const int InputLayerSize = 768;
-    public const int HiddenLayer1Size = 256;
+
+    public const int InputLayerSize = 40960 + 640; // 64 * 64 * 5 * 2 = 40960, + 640 for the virtual features.
+    public const int AccumulatorSize = 256; // Size of each accumulator, actual hidden layer size is 2 * AccumulatorSize.
+
+    private double[][] accumulatorWeights; // These are the same for both accumulators.
+    private double[] accumulatorBiases;
+    private double[][] accumulatorWeightsVirtual; // These are "virtual" weights, used for a denser feature representation.
 
     // Weights and biases for the neural network.
-    private double[,] weights1; // [InputLayerSize X HiddenLayer1Size]
-    private double[] biases1; // [HiddenLayer1Size]
-    private double[] weights2; // [HiddenLayer1Size]
-    private double biases2; // [1]
+    private double[] outputWeights; // [AccumulatorSize * 2]
+    private double outputBias; // [1]
 
-    private double[] hiddenLayer1Activations; // [HiddenLayer1Size]
-    private double[] preActivation1; // [HiddenLayer1Size]
-    private double[] input; // [InputLayerSize]
+    private double[] accumulatorActivationsW; // [AccumulatorSize]
+    private double[] accumulatorActivationsB; // [AccumulatorSize]
+    private double[] preactivationsW; // [AccumulatorSize]
+    private double[] preactivationsB; // [AccumulatorSize]
+    private double[] inputW; // input for accumulator W [InputLayerSize]
+    private double[] inputB; // input for accumulator B [InputLayerSize]
 
     public const string ModelPath = "nnue_weights.txt";
 
     public NNUE()
     {
-        input = new double[InputLayerSize];
-        hiddenLayer1Activations = new double[HiddenLayer1Size];
-        preActivation1 = new double[HiddenLayer1Size];
-        weights1 = new double[InputLayerSize, HiddenLayer1Size];
-        biases1 = new double[HiddenLayer1Size];
-        weights2 = new double[HiddenLayer1Size];
-        biases2 = 0;
+        inputW = new double[InputLayerSize];
+        inputB = new double[InputLayerSize];
+
+        accumulatorActivationsW = new double[AccumulatorSize];
+        accumulatorActivationsB = new double[AccumulatorSize];
+        preactivationsW = new double[AccumulatorSize];
+        preactivationsB = new double[AccumulatorSize];
+        accumulatorBiases = new double[AccumulatorSize];
+        outputWeights = new double[AccumulatorSize * 2]; // There are two accumulators which have identical input weights but different output weights.
+        outputBias = 0;
+
+        // Allocate jagged arrays
+        accumulatorWeights = new double[AccumulatorSize][];
+        accumulatorWeightsVirtual = new double[AccumulatorSize][];
+        for (int i = 0; i < AccumulatorSize; i++)
+        {
+            accumulatorWeights[i] = new double[InputLayerSize];
+            accumulatorWeightsVirtual[i] = new double[InputLayerSize / 64];
+        }
+
+        // Initialize state history stack
+        stateHistory = new Stack<State>();
 
         // Initialize weights with small random values.
         Random random = new Random();
+
         // Initialize weights1 and biases1.
-        for (int i = 0; i < HiddenLayer1Size; i++)
+        for (int i = 0; i < AccumulatorSize; i++)
         {
-            biases1[i] = 0;
+            accumulatorBiases[i] = 0;
             for (int j = 0; j < InputLayerSize; j++)
             {
-                weights1[j, i] = (random.NextDouble() - 0.5) * 0.1;
+                accumulatorWeights[i][j] = (random.NextDouble() - 0.5) * 0.1;
             }
         }
+
         // Initialize output layer weights.
-        for (int i = 0; i < HiddenLayer1Size; i++)
+        for (int i = 0; i < AccumulatorSize; i++)
         {
-            weights2[i] = (random.NextDouble() - 0.5) * 0.1;
+            outputWeights[i] = (random.NextDouble() - 0.5) * 0.1;
         }
     }
 
-    public void Initialize(double[] input)
+    public void Initialize(double[] inputW, double[] inputB)
     {
-        Array.Copy(input, this.input, InputLayerSize);
+        Array.Copy(inputW, this.inputW, InputLayerSize);
+        Array.Copy(inputB, this.inputB, InputLayerSize);
 
-        // Compute the pre-activation values for the hidden layer 1.
-        for (int i = 0; i < HiddenLayer1Size; i++)
+        // Compute the pre-activation values for each accumulator.
+        for (int i = 0; i < AccumulatorSize; i++)
         {
-            double sum = biases1[i];
+            double sumW = accumulatorBiases[i];
+            double sumB = accumulatorBiases[i];
+
             for (int j = 0; j < InputLayerSize; j++)
             {
-               sum += weights1[j, i] * input[j]; 
+               sumW += accumulatorWeights[i][j] * inputW[j]; 
+               sumB += accumulatorWeights[i][j] * inputB[j];
             }
-            preActivation1[i] = sum;
-            // Apply ReLu
-            hiddenLayer1Activations[i] = ReLu(sum);
+            preactivationsW[i] = sumW;
+            preactivationsB[i] = sumB;
+
+            // Apply CReLu
+            accumulatorActivationsW[i] = CReLu(sumW);
+            accumulatorActivationsB[i] = CReLu(sumB);
         }
     }
 
@@ -87,15 +125,15 @@ public class NNUE
     public double Forward()
     {
         // Compute output layer activation
-        double output = biases2;
-        for (int i = 0; i < HiddenLayer1Size; i++)
+        double output = outputBias;
+
+        for (int i = 0; i < AccumulatorSize; i++)
         {
-            output += weights2[i] * hiddenLayer1Activations[i];
+            output += outputWeights[i] * accumulatorActivationsW[i];
+            output += outputWeights[i + AccumulatorSize] * accumulatorActivationsB[i];
         }
-        
-        // I am going to keep the output linear,
-        // so no activation function needed.
-        // output = Math.Tanh(output);
+
+        output = TanH(output);
 
         return output;
     }
@@ -109,109 +147,96 @@ public class NNUE
     {
         // === Forward Pass ===
         // Compute output layer (hidden layer has already been computed in the incremental update).
-        double output = biases2;
-        for (int i = 0; i < HiddenLayer1Size; i++)
-        {
-            output += weights2[i] * hiddenLayer1Activations[i];
-        }
+        double output = Forward();
 
         // Compute mean squared error loss.
         double loss = 0.5 * (output - target) * (output - target);
 
         // === Backward Pass ===
         // Compute output delta.
-        // Derivative of the loss with respect to the output is (output - target).
-        double deltaOutput = output - target;
+        double deltaOutput = (output - target) * DTanH(output);
 
         // Calculate the gradients for the output layer weights and bias.
-        for (int i = 0; i < HiddenLayer1Size; i++)
+        for (int i = 0; i < AccumulatorSize; i++)
         {
-            double grad = deltaOutput * hiddenLayer1Activations[i];
-            weights2[i] -= grad * learningRate;
-        }
-        biases2 -= deltaOutput * learningRate;
+            double grad = deltaOutput * accumulatorActivationsW[i];
+            outputWeights[i] -= grad * learningRate;
 
-        // Backpropagate to the hidden layer.
-        double[] deltaHidden = new double[HiddenLayer1Size];
-        for (int i = 0; i < HiddenLayer1Size; i++)
+            grad = deltaOutput * accumulatorActivationsB[i];
+            outputWeights[i + AccumulatorSize] -= grad * learningRate;
+        }
+        outputBias -= deltaOutput * learningRate;
+
+        // Backpropagate to the accumulators.
+        double[] deltaAccumulatorW = new double[AccumulatorSize];
+        double[] deltaAccumulatorB = new double[AccumulatorSize];
+        for (int i = 0; i < AccumulatorSize; i++)
         {
-            // ReLU derivative: 1 if preActivation > 0, else 0.
-            double dReLU = preActivation1[i] > 0 ? 1.0 : 0.0;
-            deltaHidden[i] = deltaOutput * weights2[i] * dReLU;
+            deltaAccumulatorW[i] = deltaOutput * outputWeights[i] * DerivativeCReLu(preactivationsW[i]);
+            deltaAccumulatorB[i] = deltaOutput * outputWeights[i + AccumulatorSize] * DerivativeCReLu(preactivationsB[i]);
         }
 
-        // Update hidden layer weights and biases.
-        for (int i = 0; i < HiddenLayer1Size; i++)
+        // Update accumulator weights and biases.
+        for (int i = 0; i < AccumulatorSize; i++)
         {
             for (int j = 0; j < InputLayerSize; j++)
             {
-                double grad = deltaHidden[i] * input[j];
-                weights1[j, i] -= grad * learningRate;
+                double gradW = deltaAccumulatorW[i] * inputW[j];
+                double gradB = deltaAccumulatorB[i] * inputB[j];
+                accumulatorWeights[i][j] -= (gradW + gradB) * learningRate; // I am training the input weights by summing the gradients from both accumulators (not sure if this is correct).
             }
-            biases1[i] -= deltaHidden[i] * learningRate;
+            accumulatorBiases[i] -= (deltaAccumulatorW[i] + deltaAccumulatorB[i]) * learningRate; // See above comment, doing the same here.
         }
 
         return loss;
     }
 
     /// <summary>
-    /// Perform a forward pass through the neural network using the given input.
-    /// Less efficient than incrementally updating the input using UpdateFeature
-    ///  and then calling Forward().
+    /// Updates the feature at the given index with the new value.
+    /// The accumulator is the index of the accumulator to update.
+    /// The accumulator is either 0 or 1.
     /// </summary>
-    /// <param name="input">All values should be 1 or 0.</param>
-    /// <returns>The evaluation of the position represented by the input</returns>
-    public double Forward(double[] input)
-    {
-        if (input.Length != InputLayerSize)
-        {
-            throw new ArgumentException($"Input size must be {InputLayerSize}.");
-        }
-
-        // Compute hidden layer 1 activations
-        for (int i = 0; i < HiddenLayer1Size; i++)
-        {
-            double sum = biases1[i];
-            for (int j = 0; j < InputLayerSize; j++)
-            {
-                sum += weights1[j, i] * input[j];
-            }
-            hiddenLayer1Activations[i] = ReLu(sum);
-        }
-
-        // Compute output layer activation
-        double output = biases2;
-        for (int i = 0; i < HiddenLayer1Size; i++)
-        {
-            output += weights2[i] * hiddenLayer1Activations[i];
-        }
-        output = Math.Tanh(output);
-
-        return output;
-    }
-
-    public void UpdateFeature(int featureIndex, double newValue)
+    /// <param name="featureIndex"></param>
+    /// <param name="newValue"></param>
+    /// <param name="accumulator"></param>
+    /// <exception cref="ArgumentException"></exception>
+    public void UpdateFeature(int featureIndex, double newValue, int accumulator)
     {
         if (featureIndex < 0 || featureIndex >= InputLayerSize)
         {
             throw new ArgumentException($"Feature index must be between 0 and {InputLayerSize - 1}. Got {featureIndex}.");
         }
 
-        double oldValue = input[featureIndex];
+        double[] input = accumulator == 0 ? inputW : inputB;
+
+        double oldValue = input[featureIndex]; 
         if (oldValue == newValue)
         {
             return; // No change
         }
 
         double delta = newValue - oldValue;
-        input[featureIndex] = newValue;
+        input[featureIndex] = newValue; // Should change inputW/inputB because it is a reference type.
 
         // Update each neuron's pre-activation
-        for (int i = 0; i < HiddenLayer1Size; i++)
+        for (int i = 0; i < AccumulatorSize; i++)
         {
-            preActivation1[i] += weights1[featureIndex, i] * delta;
-            hiddenLayer1Activations[i] = ReLu(preActivation1[i]);
+            preactivationsW[i] += accumulatorWeights[i][featureIndex] * delta;
+            accumulatorActivationsW[i] = CReLu(preactivationsW[i]);
         }
+    }
+
+
+    private double DerivativeCReLu(double x)
+    {
+        // Derivative of the Clamped ReLu activation function.
+        return x > 0 && x < 1 ? 1 : 0;
+    }
+
+    private double CReLu(double x)
+    {
+        // Clamps x to the range [0, 1]
+        return Math.Max(0, Math.Min(1, x));
     }
 
     private double ReLu(double x)
@@ -219,58 +244,231 @@ public class NNUE
         return Math.Max(0, x);
     }
 
-    public static double[] GetInput(Board board)
+    private double Sigmoid(double x)
     {
-        double[] input = new double[InputLayerSize];
-        
-        // loop through each piece type
-        for (int pieceType = 0; pieceType < 12; pieceType++)
-        {
-            ulong bitboard = board.GetBitboardByPieceType((PieceType)pieceType);
-
-            // loop through each square
-            for (int square = 0; square < 64; square++)
-            {
-                double occupied = (bitboard & (1UL << square)) != 0 ? 1 : 0;
-                input[pieceType * 64 + square] = occupied;
-            }
-        }
-       return input;
+        return 1 / (1 + Math.Exp(-x));
     }
 
-    public void ApplyMove(Move move)
+    private double DSigmoid(double x)
     {
-        // Update the input layer with the new board state.
+        return Sigmoid(x) * (1 - Sigmoid(x));
+    }
+
+    private double TanH(double x)
+    {
+        return Math.Tanh(x);
+    }
+
+    private double DTanH(double x)
+    {
+        return 1 - x * x;
+    }
+
+
+    /// <summary>
+    /// Returns the input layer for a *single accumulator*.
+    /// The input layer is a 64*64*5*2 = 40960 element array.
+    /// </summary>
+    /// <param name="board"></param>
+    /// <param name="whiteToMove"></param>
+    /// <returns></returns>
+    public static double[] GetInput(Board board, bool whiteToMove)
+    {
+        // Get the HalfKP? feature vector for the given board.
+        double[] input = new double[InputLayerSize];
+
+        int kingSquare = whiteToMove ? board.WhiteKingSquare : board.BlackKingSquare;
+
+        // Loop through each piece type
+        for (int pieceType = 0; pieceType < 5; pieceType++)
+        {
+            // Loop through each colour
+            for (int colour = 0; colour < 2; colour++)
+            {
+                ulong bitboard = board.GetBitboardByPieceType((PieceType)(pieceType + colour * 6));                
+
+                colour = whiteToMove ? colour : 1 - colour;
+
+                int pieceIndex = pieceType * 2 + colour;
+
+                // Loop through each square
+                for (int square = 0; square < 64; square++)
+                {
+                    int targetSquare = whiteToMove ? square : 63 - square; // Flip the square if black to move
+                    double occupied = BitboardUtility.IsBitSet(bitboard, targetSquare) ? 1 : 0; 
+                    input[square + (pieceIndex + kingSquare * 10) * 64] = occupied;
+                }
+            }
+        }
+
+        return input;
+    }
+
+    public int GetFeatureIndex(int kingsquare, PieceType piecetype, int square, bool whitePerspective, bool virtualFeature = false)
+    {
+        if (kingsquare < 0 || kingsquare >= 64)
+        {
+            throw new ArgumentException("King square must be between 0 and 63.");
+        }
+
+        int pieceColour = PieceUtility.Colour(piecetype); // 0 for white, 1 for black
+
+        int piecetype_int = (int) piecetype;
+
+        if (!whitePerspective)
+        {
+            square = 63 - square; // Flip the square
+            kingsquare = 63 - kingsquare;
+
+            piecetype_int = (int)PieceUtility.GetOppositePiece(piecetype);
+
+            pieceColour = 1 - pieceColour;
+        }
+
+        if (pieceColour == 1)
+        {
+            piecetype_int -= 1;
+        }
+
+        if (virtualFeature)
+        {
+            return 40960 + (piecetype_int * 2 + pieceColour) * 64 + square;
+        }
+
+        int idx = square + (piecetype_int * 2 + pieceColour + kingsquare * 10) * 64;
+        if (idx < 0 || idx >= InputLayerSize)
+        {
+            Console.WriteLine("Index out of bounds: " + idx);
+            Console.WriteLine("Kingsquare: " + kingsquare);
+            Console.WriteLine("PieceType: " + piecetype);
+            Console.WriteLine("Square: " + square);
+            Console.WriteLine("White Perspective: " + whitePerspective);
+        }
+        return idx;
+    }
+
+    public void Refresh(Board board, bool whitePerspective)
+    {
+        if (whitePerspective)
+        {
+            inputW = GetInput(board, whitePerspective);
+        }
+        else
+        {
+            inputB = GetInput(board, whitePerspective);
+        }
+    }
+
+    
+    public void ApplyMove(Move move, Board board)
+    {
+        // Push the current state to the stack
+        stateHistory.Push(new(inputW, inputB, accumulatorActivationsW, accumulatorActivationsB, preactivationsW, preactivationsB));
+
         // Remove the piece from the source square.
         int sourceSquare = move.From;
-        int pieceType = (int) move.MovingPiece;
-        UpdateFeature(pieceType * 64 + sourceSquare, 0);
+        PieceType pieceType = move.MovingPiece;
+
+        bool whiteMovingPiece = PieceUtility.Colour(pieceType) == 0;
+
+        // Check if the king is moving, if so refresh the input layer.
+        // if (pieceType == PieceType.WK)Refresh(board, true);
+        //else if (pieceType == PieceType.BK) Refresh(board, false);
+        if (pieceType == PieceType.WK || pieceType == PieceType.BK)
+        {
+            Refresh(board, true);
+            Refresh(board, false);
+            return;
+        }
+
+        int whiteKingSquare = board.WhiteKingSquare;
+        int blackKingSquare = board.BlackKingSquare;
+
+        int idx, idxV;
+        if (whiteMovingPiece)
+        {
+            idx = GetFeatureIndex(whiteKingSquare, pieceType, sourceSquare, true, virtualFeature: false); // Get feature idx for white's perspective
+            idxV = GetFeatureIndex(whiteKingSquare, pieceType, sourceSquare, true, virtualFeature: true); // Get feature idx for white's perspective
+            UpdateFeature(idx, 0, 0); // Update feature in accumulator 0
+            UpdateFeature(idxV, 0, 0); // Update feature in accumulator 0
+        }
+        else
+        {
+            idx = GetFeatureIndex(blackKingSquare, pieceType, sourceSquare, false, virtualFeature: false); // Get feature idx for black
+            idxV = GetFeatureIndex(blackKingSquare, pieceType, sourceSquare, false, virtualFeature: true); // Get feature idx for black
+            UpdateFeature(idx, 0, 1); // Update feature in accumulator 1
+            UpdateFeature(idxV, 0, 1); // Update feature in accumulator 1
+        }
 
         int destSquare = move.To;
 
         // Add the piece to the destination square if it is not a promotion.
+        PieceType placedPiece;
         if (move.IsPromotion())
         {   
-            int promotedPiece = (int) move.GetPromotionType()!;
-            UpdateFeature(promotedPiece * 64 + destSquare, 1);
+            placedPiece = (PieceType)move.GetPromotionType()!;
+            placedPiece = whiteMovingPiece ? placedPiece : PieceUtility.GetOppositePiece(placedPiece);
         }
         else
         {
-            UpdateFeature(pieceType * 64 + destSquare, 1);
+            placedPiece = pieceType;
         }
+
+        if (whiteMovingPiece)
+        {
+            idx = GetFeatureIndex(whiteKingSquare, placedPiece, destSquare, true, virtualFeature: false);
+            idxV = GetFeatureIndex(whiteKingSquare, placedPiece, destSquare, true, virtualFeature: true);
+            UpdateFeature(idx, 1, 0);
+            UpdateFeature(idxV, 1, 0);
+        }
+        else
+        {
+            idx = GetFeatureIndex(blackKingSquare, placedPiece, destSquare, false, virtualFeature: false);
+            idxV = GetFeatureIndex(blackKingSquare, placedPiece, destSquare, false, virtualFeature: true);
+            UpdateFeature(idx, 1, 1);
+            UpdateFeature(idxV, 1, 1);
+        }
+
+        int rookSource = -1, rookDest = -1;
 
         // Remove the captured piece if there is one.
         if (move.IsCapture())
         {
-            int capturedPiece = (int) move.CapturedPiece!;
-            UpdateFeature(capturedPiece * 64 + destSquare, 0);
+            if (whiteMovingPiece)
+            {
+                idx = GetFeatureIndex(blackKingSquare, move.CapturedPiece!, destSquare, false, virtualFeature: false);
+                idxV = GetFeatureIndex(blackKingSquare, move.CapturedPiece!, destSquare, false, virtualFeature: true);
+                UpdateFeature(idx, 0, 1);
+                UpdateFeature(idxV, 0, 1);
+            }
+            else
+            {
+                idx = GetFeatureIndex(whiteKingSquare, move.CapturedPiece!, destSquare, true, virtualFeature: false);
+                idxV = GetFeatureIndex(whiteKingSquare, move.CapturedPiece!, destSquare, true, virtualFeature: true);
+                UpdateFeature(idx, 0, 0);
+                UpdateFeature(idxV, 0, 0);
+            }
 
             if (move.IsEnPassant())
             {
                 // Remove the captured pawn.
                 int enPassantSquare = move.To + (PieceUtility.Colour(move.MovingPiece) == 0 ? -8 : 8);
-                UpdateFeature((int) PieceType.WP * 64 + enPassantSquare, 0);
-                UpdateFeature((int) PieceType.BP * 64 + enPassantSquare, 0);
+
+                if (whiteMovingPiece)
+                {
+                    idx = GetFeatureIndex(blackKingSquare, PieceType.BP, enPassantSquare, false, virtualFeature: false);
+                    idxV = GetFeatureIndex(blackKingSquare, PieceType.BP, enPassantSquare, false, virtualFeature: true);
+                    UpdateFeature(idx, 0, 1);
+                    UpdateFeature(idxV, 0, 1);
+                }
+                else
+                {
+                    idx = GetFeatureIndex(whiteKingSquare, PieceType.WP, enPassantSquare, true, virtualFeature: false);
+                    idxV = GetFeatureIndex(whiteKingSquare, PieceType.WP, enPassantSquare, true, virtualFeature: true);
+                    UpdateFeature(idx, 0, 0);
+                    UpdateFeature(idxV, 0, 0);
+                }
+
             }
         }
         // Handle castling
@@ -278,96 +476,60 @@ public class NNUE
         {
             // Move the rook
             bool isWhite = PieceUtility.Colour(move.MovingPiece) == 0;
-            int rookPiece = (int) (isWhite ? PieceType.WR : PieceType.BR);
-            int rookSource = isWhite ? 63 : 7;
-            int rookDest = isWhite ? 61 : 5;
-            UpdateFeature(rookPiece * 64 + rookSource, 0);
-            UpdateFeature(rookPiece * 64 + rookDest, 1);
+            rookSource = isWhite ? 63 : 7;
+            rookDest = isWhite ? 61 : 5;
         }
         else if (move.IsQueensideCastle())
         {
             // Move the rook
             bool isWhite = PieceUtility.Colour(move.MovingPiece) == 0;
-            int rookPiece = (int) (isWhite ? PieceType.WR : PieceType.BR);
-            int rookSource = isWhite ? 56 : 0;
-            int rookDest = isWhite ? 59 : 3;
-            UpdateFeature(rookPiece * 64 + rookSource, 0);
-            UpdateFeature(rookPiece * 64 + rookDest, 1);
+            rookSource = isWhite ? 56 : 0;
+            rookDest = isWhite ? 59 : 3;
+        }
+
+        if (rookSource != -1 && rookDest != -1)
+        {
+            if (whiteMovingPiece)
+            {
+                // Removing the rook
+                idx = GetFeatureIndex(whiteKingSquare, PieceType.WR, rookSource, true, virtualFeature: false);
+                idxV = GetFeatureIndex(whiteKingSquare, PieceType.WR, rookSource, true, virtualFeature: true);
+                UpdateFeature(idx, 0, 0);
+                UpdateFeature(idxV, 0, 0);
+                
+                // Adding the rook
+                idx = GetFeatureIndex(whiteKingSquare, PieceType.WR, rookDest, true, virtualFeature: false);
+                idxV = GetFeatureIndex(whiteKingSquare, PieceType.WR, rookDest, true, virtualFeature: true);
+                UpdateFeature(idx, 1, 0);
+                UpdateFeature(idxV, 1, 0);
+            }
+            else
+            {
+                // Removing the rook
+                idx = GetFeatureIndex(blackKingSquare, PieceType.BR, rookSource, false, virtualFeature: false);
+                idxV = GetFeatureIndex(blackKingSquare, PieceType.BR, rookSource, false, virtualFeature: true);
+                UpdateFeature(idx, 0, 1);
+                UpdateFeature(idxV, 0, 1);
+                
+                // Adding the rook
+                idx = GetFeatureIndex(blackKingSquare, PieceType.BR, rookDest, false, virtualFeature: false);
+                idxV = GetFeatureIndex(blackKingSquare, PieceType.BR, rookDest, false, virtualFeature: true);
+                UpdateFeature(idx, 1, 1);
+                UpdateFeature(idxV, 1, 1);
+            }
         }
     }
 
-    public void UndoMove(Move move)
+    public void UndoMove()
     {
-        int sourceSquare = move.From;
-        int destSquare = move.To;
-        int pieceType = (int) move.MovingPiece;
-
-        // 1. Undo the destination update:
-        // Remove the piece from the destination square.
-        if (move.IsPromotion())
-        {
-            // If it was a promotion, remove the promoted piece.
-            int promotedPiece = (int) move.GetPromotionType()!;
-            UpdateFeature(promotedPiece * 64 + destSquare, 0);
-        }
-        else
-        {
-            // Otherwise, remove the moving piece from the destination.
-            UpdateFeature(pieceType * 64 + destSquare, 0);
-        }
-
-        // 2. If the move was a capture, restore the captured piece.
-        if (move.IsCapture())
-        {
-            int capturedPiece = (int) move.CapturedPiece!;
-            // Restore the captured piece on the destination square.
-            UpdateFeature(capturedPiece * 64 + destSquare, 1);
-
-            if (move.IsEnPassant())
-            {
-                // In en passant, the captured pawn is not on the destination square.
-                int enPassantSquare = move.To + (PieceUtility.Colour(move.MovingPiece) == 0 ? -8 : 8);
-                // For white moving, the captured pawn is black; for black moving, it’s white.
-                if (PieceUtility.Colour(move.MovingPiece) == 0)
-                {
-                    UpdateFeature((int) PieceType.BP * 64 + enPassantSquare, 1);
-                    // Ensure no white pawn is there.
-                    UpdateFeature((int) PieceType.WP * 64 + enPassantSquare, 0);
-                }
-                else
-                {
-                    UpdateFeature((int) PieceType.WP * 64 + enPassantSquare, 1);
-                    UpdateFeature((int) PieceType.BP * 64 + enPassantSquare, 0);
-                }
-            }
-        }
-        // 3. If the move was a castling move, undo the rook move.
-        else if (move.IsKingsideCastle())
-        {
-            bool isWhite = PieceUtility.Colour(move.MovingPiece) == 0;
-            int rookPiece = (int)(isWhite ? PieceType.WR : PieceType.BR);
-            // In your update, for white kingside you moved the rook from square 63 to 61,
-            // and for black from 7 to 5.
-            int rookSource = isWhite ? 63 : 7;
-            int rookDest = isWhite ? 61 : 5;
-            // Reverse the rook move.
-            UpdateFeature(rookPiece * 64 + rookDest, 0);
-            UpdateFeature(rookPiece * 64 + rookSource, 1);
-        }
-        else if (move.IsQueensideCastle())
-        {
-            bool isWhite = PieceUtility.Colour(move.MovingPiece) == 0;
-            int rookPiece = (int)(isWhite ? PieceType.WR : PieceType.BR);
-            // For white queenside, the rook moved from square 56 to 59,
-            // and for black from 0 to 3.
-            int rookSource = isWhite ? 56 : 0;
-            int rookDest = isWhite ? 59 : 3;
-            UpdateFeature(rookPiece * 64 + rookDest, 0);
-            UpdateFeature(rookPiece * 64 + rookSource, 1);
-        }
-
-        // 4. Finally, restore the moving piece to its source square.
-        UpdateFeature(pieceType * 64 + sourceSquare, 1);
+        // Pop the state from the stack
+        State state = stateHistory.Pop();
+        inputW = state.InputW;
+        inputB = state.InputB;
+        accumulatorActivationsW = state.AccumulatorActivationsW;
+        accumulatorActivationsB = state.AccumulatorActivationsB;
+        preactivationsW = state.PreactivationsW;    
+        preactivationsB = state.PreactivationsB;
     }
 
     public void SaveWeights()
@@ -375,28 +537,28 @@ public class NNUE
         using StreamWriter writer = new(ModelPath);
 
         // Write the weights1
-        for (int i = 0; i < HiddenLayer1Size; i++)
+        for (int i = 0; i < AccumulatorSize; i++)
         {
             for (int j = 0; j < InputLayerSize; j++)
             {
-                writer.WriteLine(weights1[j, i]);
+                writer.WriteLine(accumulatorWeights[i][j]);
             }
         }
 
         // Write the biases1
-        for (int i = 0; i < HiddenLayer1Size; i++)
+        for (int i = 0; i < AccumulatorSize; i++)
         {
-            writer.WriteLine(biases1[i]);
+            writer.WriteLine(accumulatorBiases[i]);
         }
 
         // Write the weights2
-        for (int i = 0; i < HiddenLayer1Size; i++)
+        for (int i = 0; i < AccumulatorSize; i++)
         {
-            writer.WriteLine(weights2[i]);
+            writer.WriteLine(outputWeights[i]);
         }
 
         // Write the bias2
-        writer.WriteLine(biases2);
+        writer.WriteLine(outputBias);
     }
 
     public void LoadWeights()
@@ -406,28 +568,28 @@ public class NNUE
             using StreamReader reader = new(ModelPath);
 
             // Read the weights1
-            for (int i = 0; i < HiddenLayer1Size; i++)
+            for (int i = 0; i < AccumulatorSize; i++)
             {
                 for (int j = 0; j < InputLayerSize; j++)
                 {
-                    weights1[j, i] = double.Parse(reader.ReadLine());
+                    accumulatorWeights[i][j] = double.Parse(reader.ReadLine());
                 }
             }
 
             // Read the biases1
-            for (int i = 0; i < HiddenLayer1Size; i++)
+            for (int i = 0; i < AccumulatorSize; i++)
             {
-                biases1[i] = double.Parse(reader.ReadLine());
+                accumulatorBiases[i] = double.Parse(reader.ReadLine());
             }
 
             // Read the weights2
-            for (int i = 0; i < HiddenLayer1Size; i++)
+            for (int i = 0; i < AccumulatorSize; i++)
             {
-                weights2[i] = double.Parse(reader.ReadLine());
+                outputWeights[i] = double.Parse(reader.ReadLine());
             }
 
             // Read the bias2
-            biases2 = double.Parse(reader.ReadLine());
+            outputBias = double.Parse(reader.ReadLine());
             }
         catch
         {

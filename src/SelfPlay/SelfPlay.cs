@@ -25,11 +25,13 @@ public class SelfPlay
         for (int i = 0; i < numGames; i++)
         {
             // Create a new game
-            Game game = new(new TreestrapBot(), new TreestrapBot(), startingFen: fens[i % fens.Length]);
+            IChessBot white = i % 2 == 0 ? new TreestrapBot() : new MyBot();
+            IChessBot black = i % 2 == 0 ? new MyBot() : new TreestrapBot();
+            Game game = new(white, black, startingFen: fens[i % fens.Length]);
 
-            // Load the NNUE weights for the white bot
-            ((TreestrapBot)game.White).LoadWeights();
-            ((TreestrapBot)game.Black).LoadWeights();
+            // Load the NNUE weights
+            if (white is TreestrapBot) ((TreestrapBot)game.White).LoadWeights();
+            if (black is TreestrapBot) ((TreestrapBot)game.Black).LoadWeights();
 
             // Play the game
             game.Play(GameTime, GameTime);
