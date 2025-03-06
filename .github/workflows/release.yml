@@ -106,7 +106,14 @@ jobs:
           path: lichess-bot
 
       - name: Remove existing engine files
-        run: rm -rf lichess-bot/engines/ChessBot/*
+        run: |
+          cd lichess-bot
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git rm -r --cached engines/ChessBot
+          rm -rf lichess-bot/engines/ChessBot/*
+          git add .
+          git commit -m "Remove existing engine files"
 
       - name: Download latest build artifact
         uses: actions/download-artifact@v4
@@ -128,7 +135,6 @@ jobs:
           cd lichess-bot
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
-          git rm -r --cached engines/ChessBot
           git add engines/ChessBot
           git commit -m "Updated Chess Engine to latest version"
           git push --force origin master
