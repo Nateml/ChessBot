@@ -114,6 +114,7 @@ jobs:
       - name: Unzip the artifact
         run: |
           cd lichess-bot/engines/ChessBot/
+          rm -rf * # Remove existing files
           unzip -o chess-engine-linux-x64.zip # -o to overwrite existing files
           rm chess-engine-linux-x64.zip # Remove the zip file
 
@@ -125,6 +126,7 @@ jobs:
           cd lichess-bot
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
-          git add engines/
+          git rm -r --cached engines/ChessBot
+          git add engines/ChessBot
           git commit -m "Updated Chess Engine to latest version"
           git push --force origin master
