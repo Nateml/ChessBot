@@ -105,6 +105,9 @@ jobs:
           token: ${{ secrets.LICHESS_BOT_PAT }}
           path: lichess-bot
 
+      - name: Remove existing engine files
+        run: rm -rf lichess-bot/engines/ChessBot/*
+
       - name: Download latest build artifact
         uses: actions/download-artifact@v4
         with:
@@ -114,7 +117,6 @@ jobs:
       - name: Unzip the artifact
         run: |
           cd lichess-bot/engines/ChessBot/
-          rm -rf * # Remove existing files
           unzip -o chess-engine-linux-x64.zip # -o to overwrite existing files
           rm chess-engine-linux-x64.zip # Remove the zip file
 
