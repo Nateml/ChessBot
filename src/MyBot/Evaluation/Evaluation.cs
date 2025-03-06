@@ -10,6 +10,14 @@ public static class Evaluation
 
     public const double PositionalWeight = 0.4;
     public const int KingInCheckPenalty = 60;
+    public const int CastlingBonus = 5; // This probably needs to be very small because otherwise it would be better not to castle
+    public const int BishopPairBonus = 40;
+    public const int RookOnOpenFileBonus = 20;
+    public const int RookOnSemiOpenFileBonus = 10;
+    public const int KnightMobilityBonus = 5;
+    public const int BishopMobilityBonus = 5;
+    public const int RookMobilityBonus = 5;
+
 
     /// <summary>
     /// Returns a static evaluation of the board.
@@ -31,7 +39,7 @@ public static class Evaluation
 
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.WN), (knightIndex) => {
             // Calculate knight mobility
-            //knightMobility += BitboardUtility.CountSetBits(MoveGenData.knightTargets[knightIndex] & ~(board.WhitePiecesBitboard | board.BlackPawnAttackBitboard));
+            // knightMobility += BitboardUtility.CountSetBits(MoveGenData.knightTargets[knightIndex] & ~(board.WhitePiecesBitboard | board.BlackPawnAttackBitboard));
 
             // Penalty for having a minor piece on an undefended square
             if (!BitboardUtility.IsBitSet(board.WhiteAttackBitboard, knightIndex))
@@ -43,7 +51,7 @@ public static class Evaluation
 
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.BN), (knightIndex) => {
             // Calculate knight mobility
-            //knightMobility -= BitboardUtility.CountSetBits(MoveGenData.knightTargets[knightIndex] & ~(board.BlackPiecesBitboard | board.WhitePawnAttackBitboard));
+            // knightMobility -= BitboardUtility.CountSetBits(MoveGenData.knightTargets[knightIndex] & ~(board.BlackPiecesBitboard | board.WhitePawnAttackBitboard));
 
             if (!BitboardUtility.IsBitSet(board.BlackAttackBitboard, knightIndex))
             {
@@ -55,6 +63,7 @@ public static class Evaluation
         int whiteBishopCount = 0;
         BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.WB), (bishopIndex) => {
             whiteBishopCount++;
+
             if (!BitboardUtility.IsBitSet(board.WhiteAttackBitboard, bishopIndex))
             {
                 openingPositionalScore -= GetOpeningPieceValue(PieceType.WB);
@@ -72,9 +81,45 @@ public static class Evaluation
             }
         });
 
+        int rookOnOpenFileBonus = 0;
+
+        BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.WR), (rookIndex) => {
+            // Bonus for having a rook on an open file
+            // An open file is a file with no pawns of either color
+            // I can determine if the file is open by ANDing the file mask with the pawn bitboards
+            // If the result is 0, then the file is open
+            if ((MoveGenData.FileMasks[rookIndex % 8] & (board.GetBitboardByPieceType(PieceType.WP) | board.GetBitboardByPieceType(PieceType.BP))) == 0)
+            {
+                // Open file
+                rookOnOpenFileBonus += RookOnOpenFileBonus;
+            }
+            else if ((MoveGenData.FileMasks[rookIndex % 8] & board.GetBitboardByPieceType(PieceType.BP)) == 0)
+            {
+                // Semi-open file
+                rookOnOpenFileBonus += RookOnSemiOpenFileBonus;
+            }
+        });
+
+        BitboardUtility.ForEachBitscanForward(board.GetBitboardByPieceType(PieceType.BR), (rookIndex) => {
+            if ((MoveGenData.FileMasks[rookIndex % 8] & (board.GetBitboardByPieceType(PieceType.WP) | board.GetBitboardByPieceType(PieceType.BP))) == 0)
+            {
+                // Open file
+                rookOnOpenFileBonus -= RookOnOpenFileBonus;
+            }
+            else if ((MoveGenData.FileMasks[rookIndex % 8] & board.GetBitboardByPieceType(PieceType.WP)) == 0)
+            {
+                // Semi-open file
+                rookOnOpenFileBonus -= RookOnSemiOpenFileBonus;
+            }
+        });
+
         int eval = (int)(evalManager.MaterialScore + PositionalWeight * evalManager.PieceSquareScore);
 
         eval += (int)(PositionalWeight * (openingPositionalScore * evalManager.GamePhase + endgamePositionalScore * (24-evalManager.GamePhase)) / 24.0);
+
+        eval += rookOnOpenFileBonus;
+
+        // eval += knightMobility * KnightMobilityBonus;
 
         // Penalty for being in check:
         if (board.IsKingInCheck(true))
@@ -85,6 +130,29 @@ public static class Evaluation
         {
             eval += KingInCheckPenalty;
         }
+
+        // Bonus for having castling rights
+        if (board.CanWhiteCastleKingside() || board.CanWhiteCastleQueenside())
+        {
+            eval += CastlingBonus;
+        }
+        if (board.CanBlackCastleKingside() || board.CanBlackCastleQueenside())
+        {
+            eval -= CastlingBonus;
+        }
+
+        // Bonus for having a pair of bishops
+        if (whiteBishopCount >= 2)
+        {
+            eval += BishopPairBonus;
+        }
+        if (blackBishopCount >= 2)
+        {
+            eval -= BishopPairBonus;
+        }
+
+        // Bonus for having a rook on an open file
+
 
         return eval;
     }
