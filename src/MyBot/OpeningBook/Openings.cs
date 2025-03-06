@@ -1,3 +1,5 @@
+using System.Reflection;
+
 namespace ChessBot;
 
 public class Openings
@@ -18,7 +20,7 @@ public class Openings
         string[] textFromFile = new string[0];
         try
         {
-            textFromFile = File.ReadAllLines(Path.Combine(path, "openings.txt"));
+            textFromFile = File.ReadAllLines(Path.Combine(path, "resources/openings.txt"));
         }
         catch (FileNotFoundException)
         {
@@ -30,6 +32,7 @@ public class Openings
             Console.WriteLine("Openings file not found.");
             return;
         }
+        Console.WriteLine("Loaded openings file.");
         int depth = 0;
         foreach (string line in textFromFile)
         {
