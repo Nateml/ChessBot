@@ -42,3 +42,11 @@ The bot on lichess is currently accepting bullet, blitz and rapid games - and ca
 If you want to play against the bot locally, download the [executable](https://github.com/Nateml/ChessBot/releases) here. I suggest downloading a GUI like [Arena](http://www.playwitharena.de) and loading the engine onto there.
 
 If you do play against it, I'd love to hear feedback on how the game went. Email me at nateml.mac@gmail.com.
+
+## Testing
+
+Unit tests live in the `ChessBot.Tests` project and cover basic board functionality. Ensure the .NET SDK is installed, then run them with:
+
+```
+dotnet test
+```
